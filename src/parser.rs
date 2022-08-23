@@ -10,7 +10,9 @@ pub enum Expression {
     BinaryOperator(BinaryOperator, Box<Expression>, Box<Expression>),
     UnaryOperator(UnaryOperator, Box<Expression>),
     Print(Box<Expression>),
+    Label(String),
     GotoIf(String, Box<Expression>),
+    Decl(String),
     Set(String, Box<Expression>),
     Call(String),
     Return,
@@ -85,9 +87,8 @@ fn parse_string(token: Token) -> Result<Expression, ParserError> {
     
 }
 
-pub fn parse(lexer: Lexer) -> Result<(Vec<Expression>, HashMap<String, usize>), ParserError> {
+pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
     let mut stack = Vec::new();
-    let mut labels = HashMap::new();
 
     let mut lexer = lexer.filter(|t| !matches!(t.kind(), TokenKind::Whitespace | TokenKind::Comment));
 
@@ -99,8 +100,7 @@ pub fn parse(lexer: Lexer) -> Result<(Vec<Expression>, HashMap<String, usize>), 
 
             TokenKind::Keyword(Keyword::Label) => {
                 let name = expect_identifier(lexer.next())?;
-                labels.insert(name, stack.len());
-                continue;
+                Expression::Label(name)
             }
 
             TokenKind::Keyword(Keyword::GotoIf) => {
@@ -133,6 +133,11 @@ pub fn parse(lexer: Lexer) -> Result<(Vec<Expression>, HashMap<String, usize>), 
                 }
             }
 
+            TokenKind::Keyword(Keyword::Decl) => {
+                let name = expect_identifier(lexer.next())?;
+                Expression::Decl(name)
+            }
+
             TokenKind::Keyword(Keyword::Print) => {
                 let val = stack.pop()
                     .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
@@ -163,5 +168,5 @@ pub fn parse(lexer: Lexer) -> Result<(Vec<Expression>, HashMap<String, usize>), 
         stack.push(expr);
     } 
 
-    Ok((stack, labels))
+    Ok(stack)
 } 

@@ -5,14 +5,20 @@ mod visitors;
 use lexer::Lexer;
 
 const TEST: &str = r#"
+decl cur
+cur 2 set
+
 1 ?goto main
 
-label print_123
-    123 print
+label print_pows2
+    cur print
+    label do_pow2
+    cur cur 2 * set
+    cur 256 = not ?goto print_pows2
     return
 
 label main
-    call print_123
+    call print_pows2
 "#;
 
 fn main() {
@@ -21,8 +27,11 @@ fn main() {
     let prog = parser::parse(lexer)
         .unwrap();
 
-    println!("labels: {:?}", prog.1);
-    println!("expressions: {:?}", prog.0);
+    println!("expressions: {:?}", prog);
 
-    visitors::eval::run(prog);
+    let ir = visitors::compiler::compile(prog);
+
+    println!("IR: {:?}", ir);
+
+    visitors::eval::run(ir);
 }
