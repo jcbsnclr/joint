@@ -1,19 +1,24 @@
 use crate::lexer::{Lexer, TokenKind, Keyword, Token, Operator};
 
+use std::collections::HashMap;
+
 #[derive(Debug, Clone)]
 pub enum Expression {
     String(String),
+    Identifier(String),
     Integer(i64),
     Operator(Operator, Box<Expression>, Box<Expression>),
     Print(Box<Expression>),
+    GotoIf(String, Box<Expression>),
+    Set(String, Box<Expression>)
     // Hello(Box<Expression>, Box<Expression>)
 }
 
 #[derive(Debug, Copy, Clone)]
 pub enum ParserError {
-    // UnexpectedToken {
-    //     expected: TokenKind, found: Option<TokenKind>, span: (usize, usize)
-    // },
+    UnexpectedToken {
+        expected: TokenKind, found: Option<TokenKind>, span: (usize, usize)
+    },
 
     UnterminatedString {
         span: (usize, usize)
@@ -23,6 +28,21 @@ pub enum ParserError {
         expected: usize,
         found: usize,
         span: (usize, usize)
+    },
+
+    NonLValueAssign
+}
+
+fn expect_identifier(token: Option<Token>) -> Result<String, ParserError> {
+    if let Some(token) = token {
+        if token.kind() != TokenKind::Identifier {
+            Err(ParserError::UnexpectedToken { expected: TokenKind::Identifier, found: Some(token.kind()), span: token.span() })
+        } else {
+            Ok(token.data().to_owned())
+        }
+    } else {
+        // TODO: fix span 
+        Err(ParserError::UnexpectedToken { expected: TokenKind::Identifier, found: None, span: (0,0) })
     }
 }
 
@@ -61,14 +81,45 @@ fn parse_string(token: Token) -> Result<Expression, ParserError> {
     
 }
 
-pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
+pub fn parse(lexer: Lexer) -> Result<(Vec<Expression>, HashMap<String, usize>), ParserError> {
     let mut stack = Vec::new();
+    let mut labels = HashMap::new();
+
     let mut lexer = lexer.filter(|t| !matches!(t.kind(), TokenKind::Whitespace | TokenKind::Comment));
 
     while let Some(token) = lexer.next() {
         let expr = match token.kind() {
             TokenKind::Integer => Expression::Integer(token.data().parse().unwrap()),
+            TokenKind::Identifier => Expression::Identifier(token.data().to_owned()),
             TokenKind::StringLit => parse_string(token)?,
+
+            TokenKind::Keyword(Keyword::Label) => {
+                let name = expect_identifier(lexer.next())?;
+                labels.insert(name, stack.len());
+                continue;
+            }
+
+            TokenKind::Keyword(Keyword::GotoIf) => {
+                let val = stack.pop()
+                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
+                let name = expect_identifier(lexer.next())?;
+
+                Expression::GotoIf(name, Box::new(val))
+            }
+
+            TokenKind::Keyword(Keyword::Set) => {
+                let val = stack.pop()
+                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
+
+                let name = stack.pop()
+                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
+                
+                if let Expression::Identifier(name) = name {
+                    Expression::Set(name, Box::new(val))
+                } else {
+                    return Err(ParserError::NonLValueAssign)
+                }
+            }
 
             TokenKind::Keyword(Keyword::Print) => {
                 let val = stack.pop()
@@ -84,11 +135,12 @@ pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
 
                 pair => unimplemented!("{:?}", pair)
             }
+
             _ => unimplemented!("{:?}", token)
         };
 
         stack.push(expr);
     } 
 
-    Ok(stack)
+    Ok((stack, labels))
 } 

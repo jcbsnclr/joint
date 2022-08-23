@@ -3,7 +3,10 @@ use std::iter::Peekable;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Keyword {
-    Print
+    Label,
+    GotoIf,
+    Print,
+    Set
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -11,7 +14,8 @@ pub enum Operator {
     Plus,
     Hyphen,
     Asterisk,
-    Slash
+    Slash,
+    Equals
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -50,6 +54,8 @@ impl<'a> Lexer<'a> {
     pub fn from_source(source: &'a str) -> Lexer<'a> {
         Lexer { source: source, stream: source.char_indices().peekable(), pos: 0 }
     }
+
+    pub fn pos(&self) -> usize { self.pos }
 }
 
 fn identifier_start(c: char) -> bool {
@@ -133,8 +139,12 @@ impl<'a> Lexer<'a> {
             "-" => TokenKind::Operator(Operator::Hyphen),
             "*" => TokenKind::Operator(Operator::Asterisk),
             "/" => TokenKind::Operator(Operator::Slash),
+            "=" => TokenKind::Operator(Operator::Equals),
 
             "print" => TokenKind::Keyword(Keyword::Print),
+            "label" => TokenKind::Keyword(Keyword::Label),
+            "?goto" => TokenKind::Keyword(Keyword::GotoIf),
+            "set" => TokenKind::Keyword(Keyword::Set),
 
             _ => TokenKind::Identifier
         };
