@@ -1,4 +1,4 @@
-use crate::lexer::{Lexer, TokenKind, Keyword, Token, Operator};
+use crate::lexer::{Lexer, TokenKind, Keyword, Token, BinaryOperator, UnaryOperator};
 
 use std::collections::HashMap;
 
@@ -7,10 +7,14 @@ pub enum Expression {
     String(String),
     Identifier(String),
     Integer(i64),
-    Operator(Operator, Box<Expression>, Box<Expression>),
+    BinaryOperator(BinaryOperator, Box<Expression>, Box<Expression>),
+    UnaryOperator(UnaryOperator, Box<Expression>),
     Print(Box<Expression>),
     GotoIf(String, Box<Expression>),
-    Set(String, Box<Expression>)
+    Set(String, Box<Expression>),
+    Call(String),
+    Return,
+    Ip,
     // Hello(Box<Expression>, Box<Expression>)
 }
 
@@ -107,6 +111,14 @@ pub fn parse(lexer: Lexer) -> Result<(Vec<Expression>, HashMap<String, usize>), 
                 Expression::GotoIf(name, Box::new(val))
             }
 
+            TokenKind::Keyword(Keyword::Call) => {
+                let label = expect_identifier(lexer.next())?;
+                
+                Expression::Call(label)
+            }
+
+            TokenKind::Keyword(Keyword::Return) => Expression::Return,
+
             TokenKind::Keyword(Keyword::Set) => {
                 let val = stack.pop()
                     .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
@@ -128,12 +140,21 @@ pub fn parse(lexer: Lexer) -> Result<(Vec<Expression>, HashMap<String, usize>), 
                 Expression::Print(Box::new(val))
             }
 
-            TokenKind::Operator(op) => match (stack.pop(), stack.pop()) {
+            TokenKind::Keyword(Keyword::Ip) => Expression::Ip,
+
+            TokenKind::BinaryOperator(op) => match (stack.pop(), stack.pop()) {
                 (None, None) => return Err(ParserError::OperatorOverflow { expected: 2, found: 0, span: token.span() }),
                 (None, Some(_)) => return Err(ParserError::OperatorOverflow { expected: 2, found: 1, span: token.span() }),
-                (Some(n2), Some(n1)) => Expression::Operator(op, Box::new(n1), Box::new(n2)),
+                (Some(n2), Some(n1)) => Expression::BinaryOperator(op, Box::new(n1), Box::new(n2)),
 
                 pair => unimplemented!("{:?}", pair)
+            }
+
+            TokenKind::UnaryOperator(op) => {
+                let val = stack.pop()
+                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
+
+                Expression::UnaryOperator(op, Box::new(val))
             }
 
             _ => unimplemented!("{:?}", token)

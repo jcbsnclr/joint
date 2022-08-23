@@ -6,22 +6,35 @@ pub enum Keyword {
     Label,
     GotoIf,
     Print,
-    Set
+    Set,
+    Call,
+    Return,
+
+    Ip
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Operator {
+pub enum BinaryOperator {
     Plus,
     Hyphen,
     Asterisk,
     Slash,
-    Equals
+    Equals,
+
+    And,
+    Or
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UnaryOperator {
+    Not
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TokenKind {
     Keyword(Keyword),
-    Operator(Operator),
+    BinaryOperator(BinaryOperator),
+    UnaryOperator(UnaryOperator),
     StringLit,
     Identifier,
     Integer,
@@ -54,8 +67,6 @@ impl<'a> Lexer<'a> {
     pub fn from_source(source: &'a str) -> Lexer<'a> {
         Lexer { source: source, stream: source.char_indices().peekable(), pos: 0 }
     }
-
-    pub fn pos(&self) -> usize { self.pos }
 }
 
 fn identifier_start(c: char) -> bool {
@@ -135,16 +146,25 @@ impl<'a> Lexer<'a> {
         let data = &self.source[start..end];
         
         let kind = match data {
-            "+" => TokenKind::Operator(Operator::Plus),
-            "-" => TokenKind::Operator(Operator::Hyphen),
-            "*" => TokenKind::Operator(Operator::Asterisk),
-            "/" => TokenKind::Operator(Operator::Slash),
-            "=" => TokenKind::Operator(Operator::Equals),
+            "+" => TokenKind::BinaryOperator(BinaryOperator::Plus),
+            "-" => TokenKind::BinaryOperator(BinaryOperator::Hyphen),
+            "*" => TokenKind::BinaryOperator(BinaryOperator::Asterisk),
+            "/" => TokenKind::BinaryOperator(BinaryOperator::Slash),
+            "=" => TokenKind::BinaryOperator(BinaryOperator::Equals),
 
             "print" => TokenKind::Keyword(Keyword::Print),
             "label" => TokenKind::Keyword(Keyword::Label),
             "?goto" => TokenKind::Keyword(Keyword::GotoIf),
+            "call" => TokenKind::Keyword(Keyword::Call),
+            "return" => TokenKind::Keyword(Keyword::Return),
             "set" => TokenKind::Keyword(Keyword::Set),
+
+            "$ip" => TokenKind::Keyword(Keyword::Ip),
+
+            "and" => TokenKind::BinaryOperator(BinaryOperator::And),
+            "or" => TokenKind::BinaryOperator(BinaryOperator::Or),
+            
+            "not" => TokenKind::UnaryOperator(UnaryOperator::Not),
 
             _ => TokenKind::Identifier
         };

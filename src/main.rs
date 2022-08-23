@@ -5,11 +5,14 @@ mod visitors;
 use lexer::Lexer;
 
 const TEST: &str = r#"
-i 10 set
-label loop
-    i print
-    i i 1 - set
-    i ?goto loop
+1 ?goto main
+
+label print_123
+    123 print
+    return
+
+label main
+    call print_123
 "#;
 
 fn main() {
