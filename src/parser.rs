@@ -15,6 +15,7 @@ pub enum Expression {
     Decl(String),
     Set(String, Box<Expression>),
     Call(String),
+    DoLoopIf(Box<Expression>, Vec<Expression>),
     Return,
     Ip,
     // Hello(Box<Expression>, Box<Expression>)
@@ -36,7 +37,15 @@ pub enum ParserError {
         span: (usize, usize)
     },
 
-    NonLValueAssign
+    NonLValueAssign,
+
+    NoMatchingDo {
+        span: (usize, usize)
+    },
+
+    ExpectedConditionExpression {
+        span: (usize, usize)
+    }
 }
 
 fn expect_identifier(token: Option<Token>) -> Result<String, ParserError> {
@@ -87,16 +96,63 @@ fn parse_string(token: Token) -> Result<Expression, ParserError> {
     
 }
 
-pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
-    let mut stack = Vec::new();
+struct ExprStack(Vec<Vec<Expression>>);
 
-    let mut lexer = lexer.filter(|t| !matches!(t.kind(), TokenKind::Whitespace | TokenKind::Comment));
+impl ExprStack {
+    pub fn new() -> ExprStack {
+        ExprStack(vec![Vec::new()])
+    }
+    
+    pub fn push(&mut self, expr: Expression) {
+        self.0
+            .iter_mut()
+            .last()
+            .unwrap()
+            .push(expr);
+    }
+
+    pub fn pop(&mut self) -> Option<Expression> {
+        self.0
+            .iter_mut()
+            .last()
+            .unwrap()
+            .pop()
+    }
+
+    pub fn push_stack(&mut self) {
+        self.0.push(Vec::new());
+    }
+
+    pub fn pop_stack(&mut self) -> Option<Vec<Expression>> {
+        self.0.pop()
+    }
+}
+
+pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
+    let mut stack = ExprStack::new();
+
+    let mut lexer = lexer.filter(|t| !matches!(t.kind(), TokenKind::Whitespace | TokenKind::Comment))
+        .peekable();
 
     while let Some(token) = lexer.next() {
         let expr = match token.kind() {
             TokenKind::Integer => Expression::Integer(token.data().parse().unwrap()),
             TokenKind::Identifier => Expression::Identifier(token.data().to_owned()),
             TokenKind::StringLit => parse_string(token)?,
+
+            TokenKind::Keyword(Keyword::Do) => {
+                stack.push_stack();
+                continue;
+            }
+
+            TokenKind::Keyword(Keyword::LoopIf) => {
+                let mut body = stack.pop_stack()
+                    .ok_or(ParserError::NoMatchingDo { span: token.span() })?;
+                let condition = body.pop()
+                    .ok_or(ParserError::ExpectedConditionExpression { span: token.span() })?;
+
+                Expression::DoLoopIf(Box::new(condition), body)
+            }
 
             TokenKind::Keyword(Keyword::Label) => {
                 let name = expect_identifier(lexer.next())?;
@@ -168,5 +224,5 @@ pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
         stack.push(expr);
     } 
 
-    Ok(stack)
+    Ok(stack.pop_stack().unwrap())
 } 

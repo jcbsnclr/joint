@@ -10,6 +10,8 @@ pub enum Keyword {
     Decl,
     Call,
     Return,
+    Do,
+    LoopIf,
 
     Ip
 }
@@ -160,6 +162,8 @@ impl<'a> Lexer<'a> {
             "return" => TokenKind::Keyword(Keyword::Return),
             "set" => TokenKind::Keyword(Keyword::Set),
             "decl" => TokenKind::Keyword(Keyword::Decl),
+            "do" => TokenKind::Keyword(Keyword::Do),
+            "?loop" => TokenKind::Keyword(Keyword::LoopIf),
 
             "$ip" => TokenKind::Keyword(Keyword::Ip),
 

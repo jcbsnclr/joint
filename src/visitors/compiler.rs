@@ -131,6 +131,18 @@ impl Compiler {
                 self.ops.push(IrOp::UnOp(op));
             }
 
+            Expression::DoLoopIf(cond, body) => {
+                let body_ptr = self.ops.len();
+                
+                for expr in body {
+                    self.compile_expr(expr);
+                }
+
+                self.compile_expr(*cond);
+
+                self.ops.push(IrOp::GotoIf(body_ptr));
+            }
+
             Expression::Integer(i) => self.ops.push(IrOp::Lit(i)),
         
             _ => {}

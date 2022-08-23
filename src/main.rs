@@ -5,20 +5,28 @@ mod visitors;
 use lexer::Lexer;
 
 const TEST: &str = r#"
-decl cur
-cur 2 set
+decl i
+decl f1
+decl f2
+decl f3
 
-1 ?goto main
+f1 0 set
+f2 1 set
 
-label print_pows2
-    cur print
-    label do_pow2
-    cur cur 2 * set
-    cur 256 = not ?goto print_pows2
-    return
+f1 print f2 print
 
-label main
-    call print_pows2
+do
+    f3 
+        f1 f2 +
+    set
+
+    f3 print
+
+    f1 f2 set
+    f2 f3 set
+
+    i i 1 + set 
+i 10 = not ?loop
 "#;
 
 fn main() {
