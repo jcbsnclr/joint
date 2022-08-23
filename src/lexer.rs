@@ -21,7 +21,8 @@ pub enum TokenKind {
     StringLit,
     Identifier,
     Integer,
-    Whitespace
+    Whitespace,
+    Comment
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -66,11 +67,12 @@ impl<'a> Iterator for Lexer<'a> {
         let (_,c) = self.stream.peek()?;
 
         match c {
+            '#' => self.comment(),
+            c if c.is_whitespace() => self.whitespace(),
+
             c if identifier_start(*c) => self.identifier(),
             '0' ..= '9' => self.integer(),
             '"'         => self.string_lit(),
-
-            c if c.is_whitespace() => self.whitespace(),
 
             c => unimplemented!("Unhandled case: '{}'", c)
         }
@@ -78,6 +80,44 @@ impl<'a> Iterator for Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
+    fn whitespace(&mut self) -> Option<Token<'a>> {
+        let (start,_) = self.stream.next()?;
+        let mut end = start + 1;
+
+        while let Some((pos,_)) = self.stream.next_if(|(_,c)| c.is_whitespace()) {
+            end = pos + 1;
+        }
+
+        let data = &self.source[start..end];
+
+        self.pos = end;
+
+        Some(Token {
+            data,
+            span: (start, end),
+            kind: TokenKind::Whitespace
+        })
+    }
+
+    fn comment(&mut self) -> Option<Token<'a>> {
+        let (start,_) = self.stream.next()?;
+        let mut end = start + 1;
+
+        while let Some((pos,_)) = self.stream.next_if(|&(_,c)| c != '\n') {
+            end = pos + 1;
+        }
+
+        let data = &self.source[start..end];
+
+        self.pos = end;
+
+        Some(Token {
+            data,
+            span: (start, end),
+            kind: TokenKind::Comment
+        })
+    }
+
     fn identifier(&mut self) -> Option<Token<'a>> {
         let (start, _) = self.stream.next()?;
         let mut end = start + 1;
@@ -124,25 +164,6 @@ impl<'a> Lexer<'a> {
             data,
             span: (start, end),
             kind: TokenKind::Integer
-        })
-    }
-
-    fn whitespace(&mut self) -> Option<Token<'a>> {
-        let (start,_) = self.stream.next()?;
-        let mut end = start + 1;
-
-        while let Some((pos,_)) = self.stream.next_if(|(_,c)| c.is_whitespace()) {
-            end = pos + 1;
-        }
-
-        let data = &self.source[start..end];
-
-        self.pos = end;
-
-        Some(Token {
-            data,
-            span: (start, end),
-            kind: TokenKind::Whitespace
         })
     }
 

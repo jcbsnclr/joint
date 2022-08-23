@@ -63,7 +63,7 @@ fn parse_string(token: Token) -> Result<Expression, ParserError> {
 
 pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
     let mut stack = Vec::new();
-    let mut lexer = lexer.filter(|t| t.kind() != TokenKind::Whitespace);
+    let mut lexer = lexer.filter(|t| !matches!(t.kind(), TokenKind::Whitespace | TokenKind::Comment));
 
     while let Some(token) = lexer.next() {
         let expr = match token.kind() {
@@ -84,7 +84,7 @@ pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
 
                 pair => unimplemented!("{:?}", pair)
             }
-            tk => unimplemented!("{:?}", tk)
+            _ => unimplemented!("{:?}", token)
         };
 
         stack.push(expr);

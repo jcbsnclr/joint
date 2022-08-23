@@ -4,6 +4,7 @@ mod parser;
 use lexer::Lexer;
 
 const TEST: &str = r#"
+# test
 2 4 + 3 / 2 * print
 "#;
 
