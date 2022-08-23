@@ -1,13 +1,10 @@
 mod lexer;
 mod parser;
-mod compiler;
 
 use lexer::Lexer;
 
 const TEST: &str = r#"
-print 123
-print 456
-print 789
+1 2 + 3 * 4 /
 "#;
 
 fn main() {
@@ -16,5 +13,5 @@ fn main() {
     let prog = parser::parse(lexer)
         .unwrap();
 
-    println!("{}", compiler::compile(prog));
+    println!("{:?}", prog);
 }

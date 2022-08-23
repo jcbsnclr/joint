@@ -3,12 +3,22 @@ use std::iter::Peekable;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Keyword {
-    Print
+    Hello
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Operator {
+    Plus,
+    Hyphen,
+    Asterisk,
+    Slash
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TokenKind {
     Keyword(Keyword),
+    Operator(Operator),
+    StringLit,
     Identifier,
     Integer,
     Whitespace
@@ -22,9 +32,9 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
-    pub fn data(&self) -> &'a str { self.data }
+    pub fn data(&self) -> &'a str        { self.data }
     pub fn span(&self) -> (usize, usize) { self.span }
-    pub fn kind(&self) -> TokenKind { self.kind }
+    pub fn kind(&self) -> TokenKind      { self.kind }
 }
 
 /// a lexer turns a source file into a series of machine readable tokens
@@ -39,8 +49,14 @@ impl<'a> Lexer<'a> {
     pub fn from_source(source: &'a str) -> Lexer<'a> {
         Lexer { source: source, stream: source.char_indices().peekable(), pos: 0 }
     }
+}
 
-    pub fn pos(&self) -> usize { self.pos }
+fn identifier_start(c: char) -> bool {
+    !c.is_whitespace() && !c.is_numeric() && !c.is_control()
+}
+
+fn identifier_body(c: char) -> bool {
+    !c.is_whitespace() && !c.is_control()
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -50,9 +66,12 @@ impl<'a> Iterator for Lexer<'a> {
         let (_,c) = self.stream.peek()?;
 
         match c {
-            'a' ..= 'z' => self.identifier(),
+            c if identifier_start(*c) => self.identifier(),
             '0' ..= '9' => self.integer(),
+            '"'         => self.string_lit(),
+
             c if c.is_whitespace() => self.whitespace(),
+
             c => unimplemented!("Unhandled case: '{}'", c)
         }
     }
@@ -63,14 +82,20 @@ impl<'a> Lexer<'a> {
         let (start, _) = self.stream.next()?;
         let mut end = start + 1;
 
-        while let Some((pos,_)) = self.stream.next_if(|(_,c)| matches!(c, 'a' ..= 'z')) {
+        while let Some((pos,_)) = self.stream.next_if(|(_,c)| identifier_body(*c)) {
             end = pos + 1;
         }
 
         let data = &self.source[start..end];
         
         let kind = match data {
-            "print" => TokenKind::Keyword(Keyword::Print),
+            "+" => TokenKind::Operator(Operator::Plus),
+            "-" => TokenKind::Operator(Operator::Hyphen),
+            "*" => TokenKind::Operator(Operator::Asterisk),
+            "/" => TokenKind::Operator(Operator::Slash),
+
+            "hello" => TokenKind::Keyword(Keyword::Hello),
+
             _ => TokenKind::Identifier
         };
 
@@ -118,6 +143,25 @@ impl<'a> Lexer<'a> {
             data,
             span: (start, end),
             kind: TokenKind::Whitespace
+        })
+    }
+
+    fn string_lit(&mut self) -> Option<Token<'a>> {
+        let (start,_) = self.stream.next()?;
+        let mut end = start + 1;
+
+        while let Some((pos,_)) = self.stream.next_if(|&(_,c)| c != '"') {
+            end = pos + 1;
+        }
+
+        let data = &self.source[start..end];
+
+        self.pos = end;
+
+        Some(Token {
+            data,
+            span: (start, end),
+            kind: TokenKind::StringLit
         })
     }
 }
