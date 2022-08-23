@@ -3,7 +3,7 @@ use std::iter::Peekable;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Keyword {
-    Hello
+    Print
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -94,7 +94,7 @@ impl<'a> Lexer<'a> {
             "*" => TokenKind::Operator(Operator::Asterisk),
             "/" => TokenKind::Operator(Operator::Slash),
 
-            "hello" => TokenKind::Keyword(Keyword::Hello),
+            "print" => TokenKind::Keyword(Keyword::Print),
 
             _ => TokenKind::Identifier
         };

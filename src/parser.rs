@@ -1,10 +1,11 @@
-use crate::lexer::{Lexer, TokenKind, /* Keyword ,*/ Token, Operator};
+use crate::lexer::{Lexer, TokenKind, Keyword, Token, Operator};
 
 #[derive(Debug, Clone)]
 pub enum Expression {
     String(String),
     Integer(i64),
     Operator(Operator, Box<Expression>, Box<Expression>),
+    Print(Box<Expression>),
     // Hello(Box<Expression>, Box<Expression>)
 }
 
@@ -68,6 +69,13 @@ pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
         let expr = match token.kind() {
             TokenKind::Integer => Expression::Integer(token.data().parse().unwrap()),
             TokenKind::StringLit => parse_string(token)?,
+
+            TokenKind::Keyword(Keyword::Print) => {
+                let val = stack.pop()
+                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
+
+                Expression::Print(Box::new(val))
+            }
 
             TokenKind::Operator(op) => match (stack.pop(), stack.pop()) {
                 (None, None) => return Err(ParserError::OperatorOverflow { expected: 2, found: 0, span: token.span() }),
