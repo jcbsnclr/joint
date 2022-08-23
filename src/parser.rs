@@ -1,7 +1,5 @@
 use crate::lexer::{Lexer, TokenKind, Keyword, Token, BinaryOperator, UnaryOperator};
 
-use std::collections::HashMap;
-
 #[derive(Debug, Clone)]
 pub enum Expression {
     String(String),

@@ -1,0 +1,27 @@
+# int i, f1, f2, f3;
+decl i
+decl f1
+decl f2
+decl f3
+
+# f1 = 0; f2 = 0;
+f1 0 set
+f2 1 set
+
+f1 print f2 print
+
+do
+    # f3 = f1 + f2
+    f3 
+        f1 f2 +
+    set
+
+    f3 print
+
+    # f1 = f2
+    # f2 = f3
+    f1 f2 set
+    f2 f3 set
+
+    i i 1 + set 
+i 10 = not ?loop

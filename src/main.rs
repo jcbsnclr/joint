@@ -2,35 +2,25 @@ mod lexer;
 mod parser;
 mod visitors;
 
+use structopt::StructOpt;
+
+use std::path::PathBuf;
+
 use lexer::Lexer;
 
-const TEST: &str = r#"
-decl i
-decl f1
-decl f2
-decl f3
-
-f1 0 set
-f2 1 set
-
-f1 print f2 print
-
-do
-    f3 
-        f1 f2 +
-    set
-
-    f3 print
-
-    f1 f2 set
-    f2 f3 set
-
-    i i 1 + set 
-i 10 = not ?loop
-"#;
+#[derive(structopt::StructOpt)]
+#[structopt(name = "turbo")]
+struct Cmdline {
+    #[structopt(short, long)]
+    input: PathBuf,
+}
 
 fn main() {
-    let lexer = Lexer::from_source(TEST);
+    let cmdline = Cmdline::from_args();
+    let source = std::fs::read_to_string(cmdline.input)
+        .unwrap();
+
+    let lexer = Lexer::from_source(&source);
 
     let prog = parser::parse(lexer)
         .unwrap();
