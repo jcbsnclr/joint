@@ -1,18 +1,18 @@
-use crate::lexer::{Lexer, TokenKind, Keyword, Token, Operator};
+use crate::lexer::{Lexer, TokenKind, /* Keyword ,*/ Token, Operator};
 
 #[derive(Debug, Clone)]
 pub enum Expression {
     String(String),
     Integer(i64),
     Operator(Operator, Box<Expression>, Box<Expression>),
-    Hello(Box<Expression>, Box<Expression>)
+    // Hello(Box<Expression>, Box<Expression>)
 }
 
 #[derive(Debug, Copy, Clone)]
 pub enum ParserError {
-    UnexpectedToken {
-        expected: TokenKind, found: Option<TokenKind>, span: (usize, usize)
-    },
+    // UnexpectedToken {
+    //     expected: TokenKind, found: Option<TokenKind>, span: (usize, usize)
+    // },
 
     UnterminatedString {
         span: (usize, usize)
@@ -60,7 +60,7 @@ fn parse_string(token: Token) -> Result<Expression, ParserError> {
     
 }
 
-pub fn parse(mut lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
+pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
     let mut stack = Vec::new();
     let mut lexer = lexer.filter(|t| t.kind() != TokenKind::Whitespace);
 
