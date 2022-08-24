@@ -1,5 +1,7 @@
 use crate::visitors::compiler::{IrOp, Program};
-use crate::lexer::{BinaryOperator, UnaryOperator};
+use crate::lexer::{BinOp, UnOp};
+
+use super::compiler::OpRef;
 
 pub fn run(prog: Program) {
     let mut vars = vec![0; prog.var_count];
@@ -17,13 +19,13 @@ pub fn run(prog: Program) {
             IrOp::BinOp(op) => {
                 let (v2, v1) = (vstack.pop().unwrap(), vstack.pop().unwrap());
                 vstack.push(match op {
-                    BinaryOperator::Plus => v1 + v2,
-                    BinaryOperator::Hyphen => v1 - v2,
-                    BinaryOperator::Asterisk => v1 * v2,
-                    BinaryOperator::Slash => v1 / v2,
-                    BinaryOperator::Equals => if v1 == v2 { 1 } else { 0 },
-                    BinaryOperator::And => if v1 != 0 && v2 != 0 { 1 } else { 0 },
-                    BinaryOperator::Or => if v1 != 0 || v2 != 0 { 1 } else { 0 },
+                    BinOp::Plus => v1 + v2,
+                    BinOp::Hyphen => v1 - v2,
+                    BinOp::Asterisk => v1 * v2,
+                    BinOp::Slash => v1 / v2,
+                    BinOp::Equals => if v1 == v2 { 1 } else { 0 },
+                    BinOp::And => if v1 != 0 && v2 != 0 { 1 } else { 0 },
+                    BinOp::Or => if v1 != 0 || v2 != 0 { 1 } else { 0 },
                 });
             }
 
@@ -31,22 +33,30 @@ pub fn run(prog: Program) {
                 let v = vstack.pop().unwrap();
 
                 vstack.push(match op {
-                    UnaryOperator::Not => if v == 0 { 1 } else { 0 }
+                    UnOp::Not => if v == 0 { 1 } else { 0 }
                 });
             }
 
             IrOp::Set(var) => {
+
                 let v = vstack.pop().unwrap();
                 vars[var] = v;
+
             }
 
             IrOp::Get(var) => {
+
                 vstack.push(vars[var]);
+
             }
 
             IrOp::Call(i) => {
-                cstack.push(ip);
-                new_ip = Some(i);
+                if let OpRef::Resolved(i) = i {
+                    cstack.push(ip);
+                    new_ip = Some(i);
+                } else {
+                    panic!("Unresolved IP {:?}", i);
+                }
             }
 
             IrOp::Return => {
@@ -65,11 +75,17 @@ pub fn run(prog: Program) {
             }
 
             IrOp::GotoIf(i) => {
-                let cond = vstack.pop().unwrap();
-                if cond != 0 {
-                    new_ip = Some(i);
+                if let OpRef::Resolved(i) = i {
+                    let cond = vstack.pop().unwrap();
+                    if cond != 0 {
+                        new_ip = Some(i);
+                    }
+                } else {
+                    panic!("Unresolved IP {:?}", i);
                 }
             }
+
+            IrOp::Exit => break
         }
 
         if let Some(new_ip) = new_ip {

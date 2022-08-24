@@ -3,11 +3,9 @@ use std::iter::Peekable;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Keyword {
-    Label,
-    GotoIf,
     Print,
     Set,
-    Decl,
+    Var,
     Call,
     Return,
     Do,
@@ -20,7 +18,7 @@ pub enum Keyword {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum BinaryOperator {
+pub enum BinOp {
     Plus,
     Hyphen,
     Asterisk,
@@ -32,15 +30,15 @@ pub enum BinaryOperator {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum UnaryOperator {
+pub enum UnOp {
     Not
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TokenKind {
     Keyword(Keyword),
-    BinaryOperator(BinaryOperator),
-    UnaryOperator(UnaryOperator),
+    BinOp(BinOp),
+    UnOp(UnOp),
     StringLit,
     Identifier,
     Integer,
@@ -159,19 +157,17 @@ impl<'a> Lexer<'a> {
         let data = &self.source[start..end];
         
         let kind = match data {
-            "+" => TokenKind::BinaryOperator(BinaryOperator::Plus),
-            "-" => TokenKind::BinaryOperator(BinaryOperator::Hyphen),
-            "*" => TokenKind::BinaryOperator(BinaryOperator::Asterisk),
-            "/" => TokenKind::BinaryOperator(BinaryOperator::Slash),
-            "=" => TokenKind::BinaryOperator(BinaryOperator::Equals),
+            "+" => TokenKind::BinOp(BinOp::Plus),
+            "-" => TokenKind::BinOp(BinOp::Hyphen),
+            "*" => TokenKind::BinOp(BinOp::Asterisk),
+            "/" => TokenKind::BinOp(BinOp::Slash),
+            "=" => TokenKind::BinOp(BinOp::Equals),
 
             "print" => TokenKind::Keyword(Keyword::Print),
-            "label" => TokenKind::Keyword(Keyword::Label),
-            "?goto" => TokenKind::Keyword(Keyword::GotoIf),
             "call" => TokenKind::Keyword(Keyword::Call),
             "return" => TokenKind::Keyword(Keyword::Return),
             "set" => TokenKind::Keyword(Keyword::Set),
-            "decl" => TokenKind::Keyword(Keyword::Decl),
+            "var" => TokenKind::Keyword(Keyword::Var),
             "do" => TokenKind::Keyword(Keyword::Do),
             "?loop" => TokenKind::Keyword(Keyword::LoopIf),
 
@@ -181,10 +177,10 @@ impl<'a> Lexer<'a> {
 
             "$ip" => TokenKind::Keyword(Keyword::Ip),
 
-            "and" => TokenKind::BinaryOperator(BinaryOperator::And),
-            "or" => TokenKind::BinaryOperator(BinaryOperator::Or),
+            "and" => TokenKind::BinOp(BinOp::And),
+            "or" => TokenKind::BinOp(BinOp::Or),
             
-            "not" => TokenKind::UnaryOperator(UnaryOperator::Not),
+            "not" => TokenKind::UnOp(UnOp::Not),
 
             _ => TokenKind::Identifier
         };

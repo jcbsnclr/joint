@@ -37,4 +37,10 @@ fn main() {
         .unwrap();
 
     println!("{:#?}", prog);
+
+    let object = visitors::compiler::compile(prog);
+
+    println!("{:?}", object);
+
+    visitors::eval::run(object);
 }
