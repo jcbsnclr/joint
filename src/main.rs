@@ -20,16 +20,21 @@ fn main() {
     let source = std::fs::read_to_string(cmdline.input)
         .unwrap();
 
-    let lexer = Lexer::from_source(&source);
+    let mut lexer = Lexer::from_source(&source);
 
-    let prog = parser::parse(lexer)
+    // let prog = parser::parse_expr(&mut lexer)
+    //     .unwrap();
+
+    // println!("expressions: {:?}", prog);
+
+    // let ir = visitors::compiler::compile(prog);
+
+    // println!("IR: {:?}", ir);
+
+    // visitors::eval::run(ir);
+
+    let prog = parser::parse(&mut lexer)
         .unwrap();
 
-    println!("expressions: {:?}", prog);
-
-    let ir = visitors::compiler::compile(prog);
-
-    println!("IR: {:?}", ir);
-
-    visitors::eval::run(ir);
+    println!("{:#?}", prog);
 }

@@ -1,5 +1,43 @@
+use std::ops::{Deref, DerefMut};
+use std::iter::Peekable;
+
 use crate::lexer::{Lexer, TokenKind, Keyword, Token, BinaryOperator, UnaryOperator};
 
+#[derive(Debug, Clone)]
+pub enum ExprData {
+    Integer(i64),
+    Add(Box<Expr>, Box<Expr>),
+    Print(Box<Expr>)
+}
+
+#[derive(Debug, Clone)]
+pub struct Expr {
+    span: (usize, usize),
+    data: ExprData
+}
+
+#[derive(Debug, Clone)]
+pub enum DeclarationKind {
+    Func {
+        name: String,
+        args: Vec<String>,
+        body: Vec<Expr>
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Declaration {
+    span: (usize, usize),
+    kind: DeclarationKind
+}
+
+#[derive(Debug, Clone)]
+pub struct CompilationUnit {
+    span: (usize, usize),
+    decls: Vec<Declaration>
+}
+
+#[deprecated]
 #[derive(Debug, Clone)]
 pub enum Expression {
     String(String),
@@ -14,49 +52,10 @@ pub enum Expression {
     Set(String, Box<Expression>),
     Call(String),
     DoLoopIf(Box<Expression>, Vec<Expression>),
+    Func(String, Vec<String>, Vec<Expression>),
     Return,
     Ip,
     // Hello(Box<Expression>, Box<Expression>)
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum ParserError {
-    UnexpectedToken {
-        expected: TokenKind, found: Option<TokenKind>, span: (usize, usize)
-    },
-
-    UnterminatedString {
-        span: (usize, usize)
-    },
-
-    OperatorOverflow {
-        expected: usize,
-        found: usize,
-        span: (usize, usize)
-    },
-
-    NonLValueAssign,
-
-    NoMatchingDo {
-        span: (usize, usize)
-    },
-
-    ExpectedConditionExpression {
-        span: (usize, usize)
-    }
-}
-
-fn expect_identifier(token: Option<Token>) -> Result<String, ParserError> {
-    if let Some(token) = token {
-        if token.kind() != TokenKind::Identifier {
-            Err(ParserError::UnexpectedToken { expected: TokenKind::Identifier, found: Some(token.kind()), span: token.span() })
-        } else {
-            Ok(token.data().to_owned())
-        }
-    } else {
-        // TODO: fix span 
-        Err(ParserError::UnexpectedToken { expected: TokenKind::Identifier, found: None, span: (0,0) })
-    }
 }
 
 fn parse_string(token: Token) -> Result<Expression, ParserError> {
@@ -78,7 +77,10 @@ fn parse_string(token: Token) -> Result<Expression, ParserError> {
                 Some('n') => '\n',
                 Some(c) => c,
 
-                None => return Err(ParserError::UnterminatedString { span: token.span() })
+                None => return Err(ParserError {
+                    span: Some(token.span()),
+                    kind: ParserErrorKind::UnterminatedStringLiteral
+                })
             }),
 
             c => string.push(c)
@@ -88,20 +90,21 @@ fn parse_string(token: Token) -> Result<Expression, ParserError> {
     if terminated {
         Ok(Expression::String(string))
     } else {
-        Err(ParserError::UnterminatedString { span: token.span() })
+        Err(ParserError {
+            span: Some(token.span()),
+            kind: ParserErrorKind::UnterminatedStringLiteral
+        })
     }
-    
-    
 }
 
-struct ExprStack(Vec<Vec<Expression>>);
+struct ExprStack(Vec<Vec<Expr>>);
 
 impl ExprStack {
     pub fn new() -> ExprStack {
         ExprStack(vec![Vec::new()])
     }
     
-    pub fn push(&mut self, expr: Expression) {
+    pub fn push(&mut self, expr: Expr) {
         self.0
             .iter_mut()
             .last()
@@ -109,7 +112,7 @@ impl ExprStack {
             .push(expr);
     }
 
-    pub fn pop(&mut self) -> Option<Expression> {
+    pub fn pop(&mut self) -> Option<Expr> {
         self.0
             .iter_mut()
             .last()
@@ -121,106 +124,203 @@ impl ExprStack {
         self.0.push(Vec::new());
     }
 
-    pub fn pop_stack(&mut self) -> Option<Vec<Expression>> {
+    pub fn pop_stack(&mut self) -> Option<Vec<Expr>> {
         self.0.pop()
+    }
+
+    pub fn last_mut(&mut self) -> Option<&mut Expr> {
+        self.0
+            .iter_mut()
+            .last()
+            .unwrap()
+            .iter_mut()
+            .last()
     }
 }
 
-pub fn parse(lexer: Lexer) -> Result<Vec<Expression>, ParserError> {
-    let mut stack = ExprStack::new();
+#[derive(Debug, Copy, Clone)]
+pub enum ParserErrorKind<'a> {
+    UnexpectedToken {
+        expected: &'a [TokenKind],
+        found: Option<TokenKind>
+    },
 
-    let mut lexer = lexer.filter(|t| !matches!(t.kind(), TokenKind::Whitespace | TokenKind::Comment))
-        .peekable();
+    ExpectedToken {
+        expected: TokenKind,
+        found: Option<TokenKind>
+    },
 
-    while let Some(token) = lexer.next() {
-        let expr = match token.kind() {
-            TokenKind::Integer => Expression::Integer(token.data().parse().unwrap()),
-            TokenKind::Identifier => Expression::Identifier(token.data().to_owned()),
-            TokenKind::StringLit => parse_string(token)?,
+    BinaryOperatorUnderflow {
+        found: usize
+    },
 
-            TokenKind::Keyword(Keyword::Do) => {
-                stack.push_stack();
-                continue;
-            }
+    FunctionUnderflow {
+        expected: usize,
+        found: usize
+    },
+    
+    UnterminatedStringLiteral,
+    UnexpectedEof,
+}
 
-            TokenKind::Keyword(Keyword::LoopIf) => {
-                let mut body = stack.pop_stack()
-                    .ok_or(ParserError::NoMatchingDo { span: token.span() })?;
-                let condition = body.pop()
-                    .ok_or(ParserError::ExpectedConditionExpression { span: token.span() })?;
+#[derive(Debug, Copy, Clone)]
+pub struct ParserError<'a> {
+    span: Option<(usize, usize)>,
+    kind: ParserErrorKind<'a>
+}
 
-                Expression::DoLoopIf(Box::new(condition), body)
-            }
+fn expect_next<'a>(lexer: &mut Lexer<'a>, pred: &'a [TokenKind]) -> Result<Token<'a>, ParserError<'a>> {
+    let next = lexer.next_token()
+        .ok_or(ParserError {
+            span: None,
+            kind: ParserErrorKind::UnexpectedToken { expected: pred, found: None }
+        })?;
 
-            TokenKind::Keyword(Keyword::Label) => {
-                let name = expect_identifier(lexer.next())?;
-                Expression::Label(name)
-            }
+    if !pred.contains(&next.kind()) {
+        Err(ParserError {
+            span: Some(next.span()),
+            kind: ParserErrorKind::UnexpectedToken { expected: pred, found: Some(next.kind()) }
+        })
+    } else {
+        Ok(next)
+    }
+}
 
-            TokenKind::Keyword(Keyword::GotoIf) => {
-                let val = stack.pop()
-                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
-                let name = expect_identifier(lexer.next())?;
+fn expect_identifier<'a>(lexer: &mut Lexer<'a>) -> Result<String, ParserError<'a>> {
+    Ok(expect_next(lexer, &[TokenKind::Identifier])?.data().to_owned())
+}
 
-                Expression::GotoIf(name, Box::new(val))
-            }
+fn extract_identifier<'a>(lexer: &mut Lexer<'a>, token: Option<Token<'a>>) -> Result<String, ParserError<'a>> {
+    Ok(token.ok_or(ParserError {
+        span: None,
+        kind: ParserErrorKind::UnexpectedToken { expected: &[TokenKind::Identifier], found: None }
+    })?.data().to_owned())
+}
 
-            TokenKind::Keyword(Keyword::Call) => {
-                let label = expect_identifier(lexer.next())?;
+fn expect_keyword<'a>(lexer: &mut Lexer<'a>, kw: Keyword) -> Result<Token<'a>, ParserError<'a>> {
+    let next = lexer.next_token()
+        .ok_or(ParserError {
+            span: None,
+            kind: ParserErrorKind::ExpectedToken { expected: TokenKind::Keyword(kw), found: None }
+        })?;
+
+    match next.kind() {
+        TokenKind::Keyword(k) if kw == k => Ok(next),
+        _ => Err(ParserError {
+            span: Some(next.span()),
+            kind: ParserErrorKind::ExpectedToken { expected: TokenKind::Keyword(kw), found: Some(next.kind()) }
+        })
+    }
+}
+
+fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), ParserError<'a>> {
+    let next = lexer.next_token()
+        .ok_or(ParserError {
+            span: None,
+            kind: ParserErrorKind::UnexpectedEof
+        })?;
+
+    let (mut start, mut end) = next.span();
+
+    let expr = match next.kind() {
+        TokenKind::Integer => Ok(Expr {
+            span: next.span(),
+            data: ExprData::Integer(next.data().parse().expect("lexer misidentifier integer"))
+        }),
+
+        TokenKind::BinaryOperator(BinaryOperator::Plus) => {
+            let n2 = stack.pop()
+                .ok_or(ParserError {
+                    span: Some(next.span()),
+                    kind: ParserErrorKind::BinaryOperatorUnderflow { found: 0 }
+                })?;
+            let n1 = stack.pop()
+                .ok_or(ParserError {
+                    span: Some(next.span()),
+                    kind: ParserErrorKind::BinaryOperatorUnderflow { found: 1 }
+                })?;
+
+            start = n1.span.0;
+
+            Ok(Expr {
+                span: (start, end),
+                data: ExprData::Add(Box::new(n1), Box::new(n2))
+            })
+        },
+
+        TokenKind::Keyword(Keyword::Print) => {
+            let val = stack.pop()
+                .ok_or(ParserError {
+                    span: Some(next.span()),
+                    kind: ParserErrorKind::FunctionUnderflow { expected: 1, found: 0 }
+                })?;
+
+            Ok(Expr {
+                span: (start, end),
+                data: ExprData::Print(Box::new(val))
+            })
+        }
+
+        _ => unimplemented!("{:?}", next)
+    }?;
+
+    stack.push(expr);
+    Ok(())
+}
+
+pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'a>> {
+    let mut decls = Vec::new();
+
+    let (start, mut end) = (0, 1);
+
+    while let Some(next) = lexer.next_token() {
+        (_, end) = next.span();
+
+        match next.kind() {
+            TokenKind::Keyword(Keyword::Func) => {
+                let mut args = Vec::new();
                 
-                Expression::Call(label)
-            }
+                loop {
+                    let next = expect_next(lexer, &[
+                        TokenKind::Identifier, TokenKind::Keyword(Keyword::Does)
+                    ])?;
 
-            TokenKind::Keyword(Keyword::Return) => Expression::Return,
+                    if next.kind() == TokenKind::Keyword(Keyword::Does) {
+                        end = next.span().1; 
+                        break;
+                    } else {
+                        let ident = next.data()
+                            .to_owned();
 
-            TokenKind::Keyword(Keyword::Set) => {
-                let val = stack.pop()
-                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
-
-                let name = stack.pop()
-                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
-                
-                if let Expression::Identifier(name) = name {
-                    Expression::Set(name, Box::new(val))
-                } else {
-                    return Err(ParserError::NonLValueAssign)
+                        args.push(ident);
+                    }
                 }
-            }
 
-            TokenKind::Keyword(Keyword::Decl) => {
-                let name = expect_identifier(lexer.next())?;
-                Expression::Decl(name)
-            }
+                let name = args.pop().unwrap();
 
-            TokenKind::Keyword(Keyword::Print) => {
-                let val = stack.pop()
-                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
+                let mut stack = ExprStack::new();
 
-                Expression::Print(Box::new(val))
-            }
+                while let Some(t) = lexer.peek_token() {
+                    println!("{:?}", t.kind());
+                    if t.kind() == TokenKind::Keyword(Keyword::Done) {
+                        break;
+                    }
+                    parse_expr(lexer, &mut stack)?;
+                }
 
-            TokenKind::Keyword(Keyword::Ip) => Expression::Ip,
+                let t = expect_keyword(lexer, Keyword::Done)?;
 
-            TokenKind::BinaryOperator(op) => match (stack.pop(), stack.pop()) {
-                (None, None) => return Err(ParserError::OperatorOverflow { expected: 2, found: 0, span: token.span() }),
-                (None, Some(_)) => return Err(ParserError::OperatorOverflow { expected: 2, found: 1, span: token.span() }),
-                (Some(n2), Some(n1)) => Expression::BinaryOperator(op, Box::new(n1), Box::new(n2)),
+                end = t.span().1;
 
-                pair => unimplemented!("{:?}", pair)
-            }
+                decls.push(Declaration { span: (start, end), kind: DeclarationKind::Func { name, args, body: stack.pop_stack().unwrap() } })
+            },
 
-            TokenKind::UnaryOperator(op) => {
-                let val = stack.pop()
-                    .ok_or(ParserError::OperatorOverflow { expected: 1, found: 0, span: token.span() })?;
+            _ => unimplemented!("{:?}", next)
+        }
+    }
 
-                Expression::UnaryOperator(op, Box::new(val))
-            }
-
-            _ => unimplemented!("{:?}", token)
-        };
-
-        stack.push(expr);
-    } 
-
-    Ok(stack.pop_stack().unwrap())
-} 
+    Ok(CompilationUnit {
+        span: (start, end),
+        decls
+    })
+}

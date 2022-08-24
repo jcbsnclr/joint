@@ -1,7 +1,7 @@
 use crate::parser::Expression;
 use crate::lexer::{BinaryOperator, UnaryOperator};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, Copy, Clone)]
 pub enum IrOp {
@@ -41,7 +41,7 @@ impl Compiler {
         }
     }
 
-    fn scan_vars(&mut self, prog: &[Expression]) -> usize {
+    fn scan_declarations(&mut self, prog: &[Expression]) -> usize {
         let mut varc = 0;
 
         for expr in prog {
@@ -68,7 +68,7 @@ impl Compiler {
                 IrOp::Call(i) => *i = *ip,
                 IrOp::GotoIf(i) => *i = *ip,
 
-                _ => unimplemented!()
+                o => unimplemented!("{:?}", o)
             }
         }
 
@@ -90,6 +90,23 @@ impl Compiler {
                 self.labels.insert(name, self.ops.len());
             }
 
+            Expression::Func(name, args, body) => {
+                let trampoline_hook = format!("__{}_trampoline_hook", name);
+
+                self.ops.push(IrOp::Lit(1));
+                self.label_op(trampoline_hook.clone());
+                self.ops.push(IrOp::GotoIf(0));
+
+                self.labels.insert(name, self.ops.len());
+
+                for expr in body {
+                    self.compile_expr(expr);
+                }
+
+                self.ops.push(IrOp::Return);
+                self.labels.insert(trampoline_hook, self.ops.len());
+            }
+
             Expression::Identifier(name) => {
                 self.var_op(name);
                 self.ops.push(IrOp::Get(0));
@@ -97,7 +114,7 @@ impl Compiler {
 
             Expression::Set(name, val) => {
                 self.compile_expr(*val);
-                self.var_op(name);
+                self.var_op(name.clone());
                 self.ops.push(IrOp::Set(0));
             }
 
@@ -167,7 +184,7 @@ pub struct Program {
 pub fn compile(program: Vec<Expression>) -> Program{
     let mut compiler = Compiler::new();
 
-    let var_count = compiler.scan_vars(&program);
+    let var_count = compiler.scan_declarations(&program);
 
     for expr in program {
         compiler.compile_expr(expr);

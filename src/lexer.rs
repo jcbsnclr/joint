@@ -12,6 +12,9 @@ pub enum Keyword {
     Return,
     Do,
     LoopIf,
+    Func,
+    Does,
+    Done,
 
     Ip
 }
@@ -62,13 +65,20 @@ impl<'a> Token<'a> {
 pub struct Lexer<'a> {
     source: &'a str,
     stream: Peekable<CharIndices<'a>>,
-    pos: usize
+    pos: usize,
+    peek: Option<Token<'a>>
 }
 
 impl<'a> Lexer<'a> {
     /// anitialize lexer with a string
     pub fn from_source(source: &'a str) -> Lexer<'a> {
-        Lexer { source: source, stream: source.char_indices().peekable(), pos: 0 }
+        let mut lx = Lexer { source: source, stream: source.char_indices().peekable(), pos: 0, peek: None };
+        lx.peek = lx.advance();
+        lx
+    }
+
+    pub fn pos(&self) -> usize {
+        self.pos
     }
 }
 
@@ -165,6 +175,10 @@ impl<'a> Lexer<'a> {
             "do" => TokenKind::Keyword(Keyword::Do),
             "?loop" => TokenKind::Keyword(Keyword::LoopIf),
 
+            "func" => TokenKind::Keyword(Keyword::Func),
+            "does" => TokenKind::Keyword(Keyword::Does),
+            "done" => TokenKind::Keyword(Keyword::Done),
+
             "$ip" => TokenKind::Keyword(Keyword::Ip),
 
             "and" => TokenKind::BinaryOperator(BinaryOperator::And),
@@ -220,5 +234,27 @@ impl<'a> Lexer<'a> {
             span: (start, end),
             kind: TokenKind::StringLit
         })
+    }
+}
+
+impl<'a> Lexer<'a> {
+    fn advance(&mut self) -> Option<Token<'a>> {
+        let next = self.next()?;
+
+        if matches!(next.kind(), TokenKind::Whitespace | TokenKind::Comment) {
+            self.advance()
+        } else {
+            Some(next)
+        }
+    }
+
+    pub fn peek_token(&mut self) -> Option<Token<'a>> {
+        self.peek
+    }
+
+    pub fn next_token(&mut self) -> Option<Token<'a>> {
+        let t = self.peek_token();
+        self.peek = self.advance();
+        t
     }
 }
