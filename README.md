@@ -13,3 +13,6 @@ Run an example:
 ```
 $ cargo run -- -i examples/fibonacci.tbo
 ```
+
+# Special thanks
+* [Jackojc](https://github.com/Jackojc) for helping me get started, giving feedback as I develop, and for suggesting the name.
