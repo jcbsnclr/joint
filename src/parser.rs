@@ -11,7 +11,11 @@ pub enum ExprData {
     Set(String, Box<Expr>),
     Ident(String),
 
-    Print(Box<Expr>)
+    Print(Box<Expr>),
+
+    DoLoopIf(Box<Expr>, Vec<Expr>),
+
+    Var(String, i64),
 }
 
 #[derive(Debug, Clone)]
@@ -99,6 +103,7 @@ pub enum ParserErrorKind<'a> {
     },
 
     ExpectedIdentifier,
+    ExpectedExpression,
 
     BinaryOperatorUnderflow {
         found: usize
@@ -179,6 +184,16 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
             data: ExprData::Integer(next.data().parse().expect("lexer misidentifier integer"))
         }),
 
+        TokenKind::Keyword(Keyword::Var) => {
+            let name = expect_identifier(lexer)?;
+            let val = expect_next(lexer, &[TokenKind::Integer])?;
+
+            Ok(Expr {
+                span: (next.span().0, val.span().1),
+                data: ExprData::Var(name.data().to_owned(), val.data().parse().unwrap())
+            })
+        }
+
         TokenKind::BinOp(op) => {
             let n2 = stack.pop()
                 .ok_or(ParserError {
@@ -254,6 +269,27 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
             })
         }
 
+        TokenKind::Keyword(Keyword::Do) => {
+            stack.push_stack();
+            parse_expr(lexer, stack)?;
+            return Ok(());
+        }
+
+        TokenKind::Keyword(Keyword::LoopIf) => {
+            let mut body = stack.pop_stack().unwrap();
+
+            let cond = body.pop()
+                .ok_or(ParserError {
+                    span: Some(next.span()),
+                    kind: ParserErrorKind::ExpectedExpression
+                })?;
+
+            Ok(Expr {
+                span: (0, 0),
+                data: ExprData::DoLoopIf(Box::new(cond), body)
+            })
+        }
+
         TokenKind::Identifier => {
             let name = next.data().to_owned();
 
@@ -308,6 +344,10 @@ pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'
                 }
 
                 let name = args.pop().unwrap();
+
+                if args.len() != 0 {
+                    panic!("function arguments currently unsupported");
+                }
 
                 let mut stack = ExprStack::new();
 

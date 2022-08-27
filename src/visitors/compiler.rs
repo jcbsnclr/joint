@@ -34,10 +34,68 @@ pub struct Compiler {
     func_ids: HashMap<String, usize>,
     funcs: Vec<usize>,
 
-    var_ptrs: HashMap<String, usize>,
+    scope: Scope,
 
     globals: Vec<(usize, i64)>,
     ops: Vec<IrOp>,
+}
+
+#[derive(Debug, Clone)]
+struct Scope {
+    var_total: usize,
+    var_ptrs: Vec<HashMap<String, usize>>,
+}
+
+impl Scope {
+    fn new() -> Scope {
+        Scope {
+            var_total: 0,
+            var_ptrs: vec![HashMap::new()]
+        }
+    }
+
+    fn var_count(&self) -> usize {
+        self.var_ptrs
+            .iter()
+            .map(|s| s.len())
+            .sum()
+    }
+
+    fn current_scope(&mut self) -> &mut HashMap<String, usize> {
+        self.var_ptrs.iter_mut().last().unwrap()
+    }
+
+    fn push_scope(&mut self) {
+        self.var_ptrs.push(HashMap::new());
+    }
+
+    fn pop_scope(&mut self) {
+        self.var_ptrs.pop().unwrap();
+    }
+
+    fn define_var(&mut self, name: String) -> usize {
+        let r = self.var_count();
+        self.current_scope()
+            .insert(name.clone(), r);
+
+        if self.var_total <= r {
+            self.var_total = r + 1;
+        }
+
+        eprintln!("scope state: {:#?}", self);
+
+        r
+    }
+
+    fn get_var_ptr(&mut self, name: &String) -> usize {
+        for scope in self.var_ptrs.iter().rev() {
+            if let Some(var) = scope.get(name) {
+                return *var;
+            }
+        }
+
+        panic!("var not found: `{}`", name)
+    }
 }
 
 impl Compiler {
@@ -46,7 +104,7 @@ impl Compiler {
             func_ids: HashMap::new(),
             funcs: Vec::new(),
 
-            var_ptrs: HashMap::new(),
+            scope: Scope::new(),
 
             globals: Vec::new(),
             ops: Vec::new()
@@ -54,7 +112,6 @@ impl Compiler {
     }
 
     fn func_count(&self) -> usize { self.func_ids.len() }
-    fn var_count(&self) -> usize { self.var_ptrs.len() }
 
     fn process_declaration(&mut self, Declaration { span, kind }: &Declaration) {
         match kind {
@@ -63,8 +120,7 @@ impl Compiler {
             },
 
             DeclarationKind::Var { name, value } => {
-                let ptr = self.var_count();
-                self.var_ptrs.insert(name.clone(), ptr);
+                let ptr = self.scope.define_var(name.clone());
                 self.globals.push((ptr, *value));
             }
         }
@@ -95,14 +151,36 @@ impl Compiler {
             }
 
             ExprData::Ident(name) => {
-                let ptr = self.var_ptrs.get(name).unwrap();
-                self.ops.push(IrOp::Get(*ptr));
+                let ptr = self.scope.get_var_ptr(name);
+                self.ops.push(IrOp::Get(ptr));
             }
 
             ExprData::Set(name, val) => {
-                let ptr = *self.var_ptrs.get(name).unwrap();
+                let ptr = self.scope.get_var_ptr(name);
                 self.compile_expr(val);
                 self.ops.push(IrOp::Set(ptr));
+            },
+
+            ExprData::DoLoopIf(cond, body) => {
+                let start = self.ops.len();
+                
+                self.scope.push_scope();
+
+                for expr in body.iter() {
+                    self.compile_expr(expr);
+                }
+
+                self.compile_expr(cond);
+
+                self.scope.pop_scope();
+
+                self.ops.push(IrOp::GotoIf(OpRef::Resolved(start)));
+            }
+
+            ExprData::Var(name, val) => {
+                let ptr = self.scope.define_var(name.clone());
+                self.ops.push(IrOp::Lit(*val));
+                self.ops.push(IrOp::Set(ptr))
             }
         }
     }
@@ -113,15 +191,19 @@ impl Compiler {
                 let id = *self.func_ids.get(name).unwrap();
                 self.funcs[id] = self.ops.len();
 
+                self.scope.push_scope();
+
                 for expr in body.iter() {
                     self.compile_expr(expr);
                 }
+                
+                self.scope.pop_scope();
 
                 self.ops.push(IrOp::Return);
             },
 
             DeclarationKind::Var { name, value } => {
-                let ptr = *self.var_ptrs.get(name).unwrap();
+                let ptr = self.scope.get_var_ptr(name);
                 
                 self.globals.push((ptr, *value));
             }
@@ -178,7 +260,7 @@ pub fn compile(unit: CompilationUnit) -> Program{
     compiler.resolve_references();
 
     Program {
-        var_count: compiler.var_count(),
+        var_count: compiler.scope.var_total,
         body: compiler.ops
     }
 }

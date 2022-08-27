@@ -1,7 +1,15 @@
 var a 10
 
 func main does
-    a 10 = print
-    a 20 set
-    a 10 = print
+    var b 20
+
+    do
+        b print
+        b b 1 - set 
+    b 0 = not ?loop
+
+    do 
+        a print
+        var c 30
+    0 ?loop
 done
