@@ -1,15 +1,12 @@
-var a 10
-
 func main does
-    var b 20
+    var counter 10
 
     do
-        b print
-        b b 1 - set 
-    b 0 = not ?loop
+        counter 20 set
+    done
 
     do 
-        a print
-        var c 30
-    0 ?loop
+        counter print
+        counter counter 1 - set
+    counter 0 = not ?while
 done

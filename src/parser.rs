@@ -14,6 +14,8 @@ pub enum ExprData {
     Print(Box<Expr>),
 
     DoLoopIf(Box<Expr>, Vec<Expr>),
+    DoWhile(Box<Expr>, Vec<Expr>),
+    DoBlock(Vec<Expr>),
 
     Var(String, i64),
 }
@@ -80,14 +82,18 @@ impl ExprStack {
         self.0.pop()
     }
 
-    pub fn last_mut(&mut self) -> Option<&mut Expr> {
-        self.0
-            .iter_mut()
-            .last()
-            .unwrap()
-            .iter_mut()
-            .last()
+    fn size(&self) -> usize {
+        self.0.len()
     }
+
+    // pub fn last_mut(&mut self) -> Option<&mut Expr> {
+    //     self.0
+    //         .iter_mut()
+    //         .last()
+    //         .unwrap()
+    //         .iter_mut()
+    //         .last()
+    // }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -290,6 +296,30 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
             })
         }
 
+        TokenKind::Keyword(Keyword::While) => {
+            let mut body = stack.pop_stack().unwrap();
+
+            let cond = body.pop()
+                .ok_or(ParserError {
+                    span: Some(next.span()),
+                    kind: ParserErrorKind::ExpectedExpression
+                })?;
+
+            Ok(Expr {
+                span: (0, 0),
+                data: ExprData::DoWhile(Box::new(cond), body)
+            })
+        }
+
+        TokenKind::Keyword(Keyword::Done) => {
+            let body = stack.pop_stack().unwrap();
+
+            Ok(Expr {
+                span: (0, 0),
+                data: ExprData::DoBlock(body)
+            })
+        }
+
         TokenKind::Identifier => {
             let name = next.data().to_owned();
 
@@ -352,8 +382,8 @@ pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'
                 let mut stack = ExprStack::new();
 
                 while let Some(t) = lexer.peek_token() {
-                    println!("{:?}", t.kind());
-                    if t.kind() == TokenKind::Keyword(Keyword::Done) {
+                    dbg!(t.kind());
+                    if t.kind() == TokenKind::Keyword(Keyword::Done) && stack.size() == 1 {
                         break;
                     }
                     parse_expr(lexer, &mut stack)?;

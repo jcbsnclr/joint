@@ -10,6 +10,7 @@ pub enum Keyword {
     Return,
     Do,
     LoopIf,
+    While,
     Func,
     Does,
     Done,
@@ -170,6 +171,7 @@ impl<'a> Lexer<'a> {
             "var" => TokenKind::Keyword(Keyword::Var),
             "do" => TokenKind::Keyword(Keyword::Do),
             "?loop" => TokenKind::Keyword(Keyword::LoopIf),
+            "?while" => TokenKind::Keyword(Keyword::While),
 
             "func" => TokenKind::Keyword(Keyword::Func),
             "does" => TokenKind::Keyword(Keyword::Does),

@@ -177,6 +177,41 @@ impl Compiler {
                 self.ops.push(IrOp::GotoIf(OpRef::Resolved(start)));
             }
 
+            ExprData::DoWhile(cond, body) => {
+                let start = self.ops.len();
+
+                self.compile_expr(cond);
+                self.ops.push(IrOp::UnOp(UnOp::Not));
+
+                let jmp_pos = self.ops.len();
+
+                self.ops.push(IrOp::GotoIf(OpRef::Unresolved(0)));
+
+                self.scope.push_scope();
+
+                for expr in body.iter() {
+                    self.compile_expr(expr);
+                }
+
+                self.scope.pop_scope();
+
+                self.ops.push(IrOp::Lit(1));
+                self.ops.push(IrOp::GotoIf(OpRef::Resolved(start)));
+
+                let end = self.ops.len();
+                self.ops[jmp_pos] = IrOp::GotoIf(OpRef::Resolved(end));
+            }
+
+            ExprData::DoBlock(body) => {
+                self.scope.push_scope();
+
+                for expr in body.iter() {
+                    self.compile_expr(expr);
+                }
+
+                self.scope.pop_scope();
+            }
+
             ExprData::Var(name, val) => {
                 let ptr = self.scope.define_var(name.clone());
                 self.ops.push(IrOp::Lit(*val));
