@@ -1,0 +1,6 @@
+type msg String done
+var msg "Hello, World!"
+
+func main does
+    msg print
+done

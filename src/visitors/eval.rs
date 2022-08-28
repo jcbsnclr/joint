@@ -72,6 +72,11 @@ pub fn run(prog: Program) {
                 println!("{}", val);
             }
 
+            IrOp::PrintString => {
+                let id = vstack.pop().unwrap();
+                println!("{:?}", prog.strings[id as usize]);
+            }
+
             IrOp::Ip => {
                 vstack.push(ip as i64);
             }

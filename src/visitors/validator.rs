@@ -13,7 +13,8 @@ pub enum IntrinsicType {
     U8, I8,
     U16, I16,
     U32, I32,
-    U64, I64
+    U64, I64,
+    String
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -36,6 +37,8 @@ impl Type {
 
             TypeExprData::U64 => IntrinsicType::U64,
             TypeExprData::I64 => IntrinsicType::I64,
+
+            TypeExprData::String => IntrinsicType::String
         })
     }
 }
@@ -61,7 +64,9 @@ impl PartialEq<Type> for Type {
                 I::U16 | I::I16 | 
                 I::U32 | I::I32 | 
                 I::U64 | I::I64
-            ) => matches!(rhs, Type::Abstract(AbstractType::Integer))
+            ) => matches!(rhs, Type::Abstract(AbstractType::Integer)),
+
+            Type::Concrete(I::String) => matches!(rhs, Type::Concrete(I::String))
         }
     }
 }
@@ -187,9 +192,11 @@ impl Validator {
                 }
 
                 Some(typ)
-            }
-            
-            _ => None
+            },
+
+            ExprData::StringLit(_) => Some(Type::Concrete(IntrinsicType::String)),
+
+            ExprData::Var(_, _) => None,
         };
     }
 }

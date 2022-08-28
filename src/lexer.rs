@@ -102,9 +102,9 @@ impl<'a> Iterator for Lexer<'a> {
             '#' => self.comment(),
             c if c.is_whitespace() => self.whitespace(),
 
+            '"'         => self.string_lit(),
             c if identifier_start(*c) => self.identifier(),
             '0' ..= '9' => self.integer(),
-            '"'         => self.string_lit(),
 
             c => unimplemented!("Unhandled case: '{}'", c)
         }
@@ -228,6 +228,11 @@ impl<'a> Lexer<'a> {
 
         while let Some((pos,_)) = self.stream.next_if(|&(_,c)| c != '"') {
             end = pos + 1;
+        }
+
+        if matches!(self.stream.peek(), Some((_,'"'))) {
+            end += 1;
+            self.stream.next();
         }
 
         let data = &self.source[start..end];

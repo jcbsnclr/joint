@@ -4,6 +4,8 @@ use crate::visitors::validator::Type;
 
 use std::collections::HashMap;
 
+use super::validator::IntrinsicType;
+
 #[derive(Debug, Copy, Clone)]
 pub enum OpRef {
     Unresolved(usize),
@@ -24,6 +26,7 @@ pub enum IrOp {
     Return,
 
     Print,
+    PrintString,
     PrintType(Type),
     Ip,
 
@@ -36,9 +39,11 @@ pub struct Compiler {
     func_ids: HashMap<String, usize>,
     funcs: Vec<usize>,
 
+    strings: Vec<String>,
+
     scope: Scope,
 
-    globals: Vec<(usize, i64)>,
+    globals: Vec<(usize, Box<Expr>)>,
     ops: Vec<IrOp>,
 }
 
@@ -106,6 +111,8 @@ impl Compiler {
             func_ids: HashMap::new(),
             funcs: Vec::new(),
 
+            strings: Vec::new(),
+
             scope: Scope::new(),
 
             globals: Vec::new(),
@@ -123,7 +130,7 @@ impl Compiler {
 
             DeclarationKind::Var { name, value } => {
                 let ptr = self.scope.define_var(name.clone());
-                self.globals.push((ptr, *value));
+                self.globals.push((ptr, value.clone()));
             },
 
             _ => ()
@@ -136,6 +143,12 @@ impl Compiler {
         match data {
             ExprData::Integer(n) => {
                 self.ops.push(IrOp::Lit(*n));
+            }
+
+            ExprData::StringLit(s) => {
+                let id = self.strings.len();
+                self.strings.push(s.clone());
+                self.ops.push(IrOp::Lit(id as i64))
             }
 
             ExprData::BinOp(op, n1, n2) => {
@@ -151,7 +164,12 @@ impl Compiler {
 
             ExprData::Print(val) => {
                 self.compile_expr(val);
-                self.ops.push(IrOp::Print);
+
+                if val.typ == Some(Type::Concrete(IntrinsicType::String)) {
+                    self.ops.push(IrOp::PrintString);
+                } else {
+                    self.ops.push(IrOp::Print);
+                }
             }
 
             ExprData::PrintType(expr) => {
@@ -222,7 +240,7 @@ impl Compiler {
 
             ExprData::Var(name, val) => {
                 let ptr = self.scope.define_var(name.clone());
-                self.ops.push(IrOp::Lit(*val));
+                self.compile_expr(val);
                 self.ops.push(IrOp::Set(ptr))
             }
 
@@ -252,7 +270,7 @@ impl Compiler {
             DeclarationKind::Var { name, value } => {
                 let ptr = self.scope.get_var_ptr(name);
                 
-                self.globals.push((ptr, *value));
+                self.globals.push((ptr, value.clone()));
             },
 
             _ => ()
@@ -282,7 +300,8 @@ impl Compiler {
 #[derive(Debug, Clone)]
 pub struct Program {
     pub var_count: usize,
-    pub body: Vec<IrOp>
+    pub body: Vec<IrOp>,
+    pub strings: Vec<String>,
 }
 
 pub fn compile(unit: CompilationUnit) -> Program{
@@ -292,9 +311,9 @@ pub fn compile(unit: CompilationUnit) -> Program{
         compiler.process_declaration(decl);
     }
 
-    for (var, val) in compiler.globals.iter() {
-        compiler.ops.push(IrOp::Lit(*val));
-        compiler.ops.push(IrOp::Set(*var));
+    for (var, val) in compiler.globals.clone() {
+        compiler.compile_expr(&val);
+        compiler.ops.push(IrOp::Set(var));
     }
 
     compiler.ops.push(IrOp::Call(OpRef::Unresolved(
@@ -310,6 +329,7 @@ pub fn compile(unit: CompilationUnit) -> Program{
 
     Program {
         var_count: compiler.scope.var_total,
-        body: compiler.ops
+        body: compiler.ops,
+        strings: compiler.strings
     }
 }
