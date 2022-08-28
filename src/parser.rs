@@ -1,4 +1,5 @@
 use crate::lexer::{Lexer, TokenKind, Keyword, Token, BinOp, UnOp};
+use crate::visitors::validator::Type;
 
 #[derive(Debug, Clone)]
 pub enum ExprData {
@@ -17,6 +18,8 @@ pub enum ExprData {
     DoWhile(Box<Expr>, Vec<Expr>),
     DoBlock(Vec<Expr>),
 
+    TypeCast(Box<Expr>, TypeExpr),
+
     PrintType(Box<Expr>),
 
     Var(String, i64),
@@ -26,7 +29,7 @@ pub enum ExprData {
 pub struct Expr {
     pub span: (usize, usize),
     pub data: ExprData,
-    pub typ: Option<TypeExprData>,
+    pub typ: Option<Type>,
 }
 
 #[derive(Debug, Clone)]
@@ -363,6 +366,22 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
             Ok(Expr {
                 span: (start, end),
                 data: ExprData::PrintType(Box::new(expr)),
+                typ: None
+            })
+        }
+
+        TokenKind::Keyword(Keyword::As) => {
+            let expr = stack.pop()
+                .ok_or(ParserError {
+                    span: Some(next.span()),
+                    kind: ParserErrorKind::FunctionUnderflow { expected: 1, found: 0 }
+                })?;
+
+            let typ = parse_type_expr(lexer)?;
+
+            Ok(Expr {
+                span: (start, end),
+                data: ExprData::TypeCast(Box::new(expr), typ.clone()),
                 typ: None
             })
         }

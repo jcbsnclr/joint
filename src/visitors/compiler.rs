@@ -1,5 +1,6 @@
 use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData, TypeExprData};
 use crate::lexer::{BinOp, UnOp};
+use crate::visitors::validator::Type;
 
 use std::collections::HashMap;
 
@@ -23,7 +24,7 @@ pub enum IrOp {
     Return,
 
     Print,
-    PrintType(TypeExprData),
+    PrintType(Type),
     Ip,
 
     GotoIf(OpRef),
@@ -223,6 +224,10 @@ impl Compiler {
                 let ptr = self.scope.define_var(name.clone());
                 self.ops.push(IrOp::Lit(*val));
                 self.ops.push(IrOp::Set(ptr))
+            }
+
+            ExprData::TypeCast(e, _) => {
+                self.compile_expr(e);
             }
         }
     }

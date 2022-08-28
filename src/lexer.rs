@@ -16,6 +16,7 @@ pub enum Keyword {
     Done,
     Type,
     PrintType,
+    As,
 
     Ip
 }
@@ -181,6 +182,7 @@ impl<'a> Lexer<'a> {
             "done" => TokenKind::Keyword(Keyword::Done),
 
             "type" => TokenKind::Keyword(Keyword::Type),
+            "as" => TokenKind::Keyword(Keyword::As),
 
             "$ip" => TokenKind::Keyword(Keyword::Ip),
 

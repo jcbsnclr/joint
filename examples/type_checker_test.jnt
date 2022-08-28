@@ -1,0 +1,10 @@
+type a I32 done
+var a 1
+type b I64 done
+var b 0
+
+func main does
+    a 10 set
+    # next expr should fail to compile
+    b a set
+done

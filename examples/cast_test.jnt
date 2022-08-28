@@ -1,0 +1,11 @@
+func main does
+    0 print-type
+    0 as U8 done print-type 
+    0 as I8 done print-type 
+    0 as U16 done print-type 
+    0 as I16 done print-type 
+    0 as U32 done print-type 
+    0 as I32 done print-type 
+    0 as U64 done print-type 
+    0 as I64 done print-type 
+done
