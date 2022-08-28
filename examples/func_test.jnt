@@ -1,0 +1,18 @@
+# Call(main) Exit
+
+type print_string String String Func done
+func s a print_string does
+    # BpGet(s) PrintString
+    s print
+    # BpGet(a) PrintString
+    a print
+    # BpRem(2) Return
+done
+
+type main Func done
+func main does
+    # BpUpdate Lit("Hello") Lit("World") Call(print_string)
+    "Hello" "World" print_string
+    # BpRem(0)
+    # Return
+done

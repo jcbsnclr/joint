@@ -1,5 +1,7 @@
 use crate::lexer::{Lexer, TokenKind, Keyword, Token, BinOp, UnOp};
-use crate::visitors::validator::Type;
+use crate::visitors::validator::{Type, IntrinsicType};
+
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum ExprData {
@@ -11,7 +13,9 @@ pub enum ExprData {
 
     // VarDecl(String),
     Set(String, Box<Expr>),
-    Ident(String),
+    Get(String),
+
+    FnCall(String, Vec<Expr>),
 
     Print(Box<Expr>),
 
@@ -19,7 +23,7 @@ pub enum ExprData {
     DoWhile(Box<Expr>, Vec<Expr>),
     DoBlock(Vec<Expr>),
 
-    TypeCast(Box<Expr>, TypeExpr),
+    TypeCast(Box<Expr>, Type),
 
     PrintType(Box<Expr>),
 
@@ -46,7 +50,7 @@ pub enum DeclarationKind {
     },
     Type {
         var: String,
-        typ: TypeExpr
+        typ: Type
     }
 }
 
@@ -144,73 +148,57 @@ pub struct ParserError<'a> {
     pub kind: ParserErrorKind<'a>
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum TypeExprData {
-    U8, I8,
-    U16, I16,
-    U32, I32,
-    U64, I64,
-    String
-}
-
 #[derive(Debug, Clone)]
 pub struct TypeExpr {
     pub span: (usize, usize),
-    pub data: TypeExprData
+    pub data: Type
 }
 
-fn parse_type_expr<'a>(lexer: &mut Lexer<'a>) -> Result<TypeExpr, ParserError<'a>> {
-    let t = expect_identifier(lexer)?;
+fn parse_type<'a>(lexer: &mut Lexer<'a>) -> Result<Type, ParserError<'a>> {
+    let mut type_stack = Vec::new();
 
-    expect_keyword(lexer, Keyword::Done)?;
+    while let Some(t) = lexer.next_token() {
+        if t.kind() == TokenKind::Keyword(Keyword::Done) {
+            break;
+        } else if t.kind() != TokenKind::Identifier {
+            return Err(ParserError {
+                span: Some(t.span()),
+                kind: ParserErrorKind::ExpectedIdentifier
+            })
+        }
 
-    match t.data() {
-        "U8" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::U8
-        }),
-        "I8" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::I8
-        }),
+        let expr = match t.data() {
+            "U8" => Ok(Type::Concrete(IntrinsicType::U8)),
+            "I8" => Ok(Type::Concrete(IntrinsicType::I8)),
+    
+            "U16" => Ok(Type::Concrete(IntrinsicType::U16)),
+            "I16" => Ok(Type::Concrete(IntrinsicType::I16)),
+    
+            "U32" => Ok(Type::Concrete(IntrinsicType::U32)),
+            "I32" => Ok(Type::Concrete(IntrinsicType::I32)),
+    
+            "U64" => Ok(Type::Concrete(IntrinsicType::U64)),
+            "I64" => Ok(Type::Concrete(IntrinsicType::I64)),
+    
+            "String" => Ok(Type::Concrete(IntrinsicType::String)),
 
-        "U16" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::U16
-        }),
-        "I16" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::I16
-        }),
+            "Func" => {
+                let args = type_stack.drain(..)
+                    .collect();
 
-        "U32" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::U32
-        }),
-        "I32" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::I32
-        }),
+                Ok(Type::Function { args })
+            }
+    
+            _ => Err(ParserError {
+                span: Some(t.span()),
+                kind: ParserErrorKind::UnknownType(t.data())
+            })
+        }?;
 
-        "U64" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::U64
-        }),
-        "I64" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::I64
-        }),
-
-        "String" => Ok(TypeExpr {
-            span: t.span(),
-            data: TypeExprData::String
-        }),
-
-        _ => Err(ParserError {
-            span: Some(t.span()),
-            kind: ParserErrorKind::UnknownType(t.data())
-        })
+        type_stack.push(expr);
     }
+
+    Ok(type_stack.pop().unwrap())
 }
 
 fn expect_next<'a>(lexer: &mut Lexer<'a>, pred: &'a [TokenKind]) -> Result<Token<'a>, ParserError<'a>> {
@@ -257,7 +245,7 @@ fn expect_keyword<'a>(lexer: &mut Lexer<'a>, kw: Keyword) -> Result<Token<'a>, P
     }
 }
 
-fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), ParserError<'a>> {
+fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack, fnargs: &mut HashMap<String, usize>) -> Result<(), ParserError<'a>> {
     let next = lexer.next_token()
         .ok_or(ParserError {
             span: None,
@@ -275,7 +263,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
         TokenKind::Keyword(Keyword::Var) => {
             let name = expect_identifier(lexer)?;
-            parse_expr(lexer, stack)?;
+            parse_expr(lexer, stack, fnargs)?;
             let val = stack.pop().unwrap();
 
             Ok(Expr {
@@ -336,7 +324,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
                 })
                 .map(|v| (v.clone(), v.span))?;
 
-            if let Expr { data: ExprData::Ident(name), ..} = name {
+            if let Expr { data: ExprData::Get(name), ..} = name {
                 Ok(Expr {
                     span: (name_span.0, next.span().1),
                     data: ExprData::Set(name, Box::new(val)),
@@ -385,7 +373,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
                     kind: ParserErrorKind::FunctionUnderflow { expected: 1, found: 0 }
                 })?;
 
-            let typ = parse_type_expr(lexer)?;
+            let typ = parse_type(lexer)?;
 
             Ok(Expr {
                 span: (start, end),
@@ -396,7 +384,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
         TokenKind::Keyword(Keyword::Do) => {
             stack.push_stack();
-            parse_expr(lexer, stack)?;
+            parse_expr(lexer, stack, fnargs)?;
             return Ok(());
         }
 
@@ -444,12 +432,26 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
         TokenKind::Identifier => {
             let name = next.data().to_owned();
+            
+            if let Some(n) = fnargs.get(&name) {
+                let mut args = Vec::new();
 
-            Ok(Expr {
-                span: (start, end),
-                data: ExprData::Ident(name),
-                typ: None
-            })
+                for _ in 0..*n {
+                    args.push(stack.pop().unwrap());
+                }
+
+                Ok(Expr {
+                    span: (start, end),
+                    data: ExprData::FnCall(name, args),
+                    typ: None
+                })
+            } else {
+                Ok(Expr {
+                    span: (start, end),
+                    data: ExprData::Get(name),
+                    typ: None
+                })
+            }
         },
 
         TokenKind::StringLit => {
@@ -489,6 +491,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'a>> {
     let mut decls = Vec::new();
 
+    let mut fnargs = HashMap::new();
+
     let (start, mut end) = (0, 1);
 
     while let Some(next) = lexer.next_token() {
@@ -516,9 +520,7 @@ pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'
 
                 let name = args.pop().unwrap();
 
-                if args.len() != 0 {
-                    panic!("function arguments currently unsupported");
-                }
+                fnargs.insert(name.clone(), args.len());
 
                 let mut stack = ExprStack::new();
 
@@ -527,7 +529,7 @@ pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'
                     if t.kind() == TokenKind::Keyword(Keyword::Done) && stack.size() == 1 {
                         break;
                     }
-                    parse_expr(lexer, &mut stack)?;
+                    parse_expr(lexer, &mut stack, &mut fnargs)?;
                 }
 
                 let t = expect_keyword(lexer, Keyword::Done)?;
@@ -540,7 +542,7 @@ pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'
             TokenKind::Keyword(Keyword::Var) => {
                 let name = expect_identifier(lexer)?;
                 let mut stack = ExprStack::new();
-                parse_expr(lexer, &mut stack)?;
+                parse_expr(lexer, &mut stack, &mut fnargs)?;
                 let val = stack.pop().unwrap();
 
                 decls.push(Declaration { span: (next.span().0, val.span.1), kind: DeclarationKind::Var {
@@ -550,9 +552,9 @@ pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'
 
             TokenKind::Keyword(Keyword::Type) => {
                 let name = expect_identifier(lexer)?;
-                let typ = parse_type_expr(lexer)?;
+                let typ = parse_type(lexer)?;
 
-                decls.push(Declaration { span: (next.span().0, typ.span.1), kind: DeclarationKind::Type {
+                decls.push(Declaration { span: next.span(), kind: DeclarationKind::Type {
                     var: name.data().to_owned(), typ: typ
                 }});
             }

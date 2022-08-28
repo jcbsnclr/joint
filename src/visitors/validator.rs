@@ -1,4 +1,4 @@
-use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData, TypeExpr, TypeExprData};
+use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData, TypeExpr};
 use crate::lexer::{BinOp, UnOp};
 
 use std::collections::HashMap;
@@ -17,30 +17,17 @@ pub enum IntrinsicType {
     String
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum Type {
     Concrete(IntrinsicType),
-    Abstract(AbstractType)
+    Abstract(AbstractType),
+    Function {
+        args: Vec<Type>
+    }
 }
 
 impl Type {
-    fn from_type_expr(expr: &TypeExpr) -> Type {
-        Type::Concrete(match expr.data {
-            TypeExprData::U8 => IntrinsicType::U8,
-            TypeExprData::I8 => IntrinsicType::I8,
 
-            TypeExprData::U16 => IntrinsicType::U16,
-            TypeExprData::I16 => IntrinsicType::I16,
-
-            TypeExprData::U32 => IntrinsicType::U32,
-            TypeExprData::I32 => IntrinsicType::I32,
-
-            TypeExprData::U64 => IntrinsicType::U64,
-            TypeExprData::I64 => IntrinsicType::I64,
-
-            TypeExprData::String => IntrinsicType::String
-        })
-    }
 }
 
 impl PartialEq<Type> for Type {
@@ -66,7 +53,17 @@ impl PartialEq<Type> for Type {
                 I::U64 | I::I64
             ) => matches!(rhs, Type::Abstract(AbstractType::Integer)),
 
-            Type::Concrete(I::String) => matches!(rhs, Type::Concrete(I::String))
+            Type::Concrete(I::String) => matches!(rhs, Type::Concrete(I::String)),
+
+            Type::Function { args } => match rhs {
+                Type::Function { args: rhs_args} => {
+                    args.iter()
+                        .zip(rhs_args.iter())
+                        .map(|(l,r)| l == r)
+                        .fold(true, |res, test| res && test)
+                }
+                _ => false
+            }
         }
     }
 }
@@ -101,11 +98,15 @@ impl Validator {
 
     fn declare_var(&mut self, name: String, typ: Type) {
         self.current_scope_mut()
-            .insert(name, typ);
+            .insert(dbg!(name), dbg!(typ));
     }
 
     fn get_var_type(&mut self, name: &String) -> Type {
-        self.current_scope()
+        dbg!(name);
+        self.var_types.iter()
+            .flatten()
+            .map(|(lhs, rhs)| (lhs.clone(), rhs.clone()))
+            .collect::<HashMap<String, Type>>()
             .get(name)
             .cloned()
             .unwrap()
@@ -121,7 +122,7 @@ impl Validator {
                     panic!("BinOp: type mismatch: {:?}, {:?}", n1, n2);
                 }
 
-                n1.typ
+                n1.typ.clone()
             }
             ExprData::UnOp(op, n) => {
                 self.fill_types(n);
@@ -130,7 +131,7 @@ impl Validator {
                     panic!("UnOp: type mismatch: {:?}", n.typ);
                 }
 
-                n.typ
+                n.typ.clone()
             }
             ExprData::DoBlock(body) => {
                 for expr in body {
@@ -167,14 +168,14 @@ impl Validator {
 
                 let var_type = self.get_var_type(var);
 
-                if Some(var_type) != val.typ {
+                if Some(var_type.clone()) != val.typ {
                     panic!("Set: attempted to assign value of type `{:?}` to variable of type `{:?}`", val.typ, var_type);
                 }
 
                 None
             },
 
-            ExprData::Ident(n) => {
+            ExprData::Get(n) => {
                 Some(self.get_var_type(n))
             }
 
@@ -185,16 +186,37 @@ impl Validator {
             ExprData::TypeCast(e, t) => {
                 self.fill_types(e);
 
-                let typ = Type::from_type_expr(t);
-
-                if e.typ != Some(typ) {
+                if e.typ != Some(t.clone()) {
                     panic!("TypeCast: invalid cast ({:?} -> {:?})", e.typ, t);
                 }
 
-                Some(typ)
+                Some(t.clone())
             },
 
             ExprData::StringLit(_) => Some(Type::Concrete(IntrinsicType::String)),
+
+            ExprData::FnCall(name, args) => {
+                for arg in args.iter_mut() {
+                    self.fill_types(arg);
+                }
+
+                let found_type = Type::Function { 
+                    args: args.iter()
+                        .map(|a| a.typ.clone())
+                        .filter_map(|t| t)
+                        .collect()
+                };
+
+                let fn_type = self.get_var_type(&name.clone());
+
+                if found_type == fn_type {
+                    dbg!(name);
+                    dbg!(args);
+                    None
+                } else {
+                    panic!("FnCall ({}): type mismatch\nexpected `{:?}`, found `{:?}`)", name, fn_type, found_type)
+                }
+            }
 
             ExprData::Var(_, _) => None,
         };
@@ -206,14 +228,25 @@ pub fn validate(unit: &mut CompilationUnit) {
 
     for Declaration { kind, .. } in unit.decls.iter() {
         match kind {
-            DeclarationKind::Type { var, typ } => validator.declare_var(var.clone(), Type::from_type_expr(typ)),
+            DeclarationKind::Type { var, typ } => validator.declare_var(var.clone(), typ.clone()),
             _ => ()
         }
     }
 
     for Declaration { kind, .. } in unit.decls.iter_mut() {
         match kind {
-            DeclarationKind::Func { body, .. } => {
+            DeclarationKind::Func { name, body, args, .. } => {
+                let type_info = validator.get_var_type(name);
+                
+                if let Type::Function { args: arg_types } = type_info {
+                    let vs = args.iter()
+                        .zip(arg_types.iter());
+
+                    for (k,v) in vs {
+                        validator.declare_var(k.clone(), v.clone())
+                    }
+                }
+
                 for expr in body {
                     validator.fill_types(expr);
                 }

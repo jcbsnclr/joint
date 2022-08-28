@@ -6,11 +6,12 @@ use super::compiler::OpRef;
 pub fn run(prog: Program) {
     let mut vars = vec![0; prog.var_count];
     let mut ip = 0;
+    let mut bp = 0;
     let mut cstack = Vec::new();
     let mut vstack = Vec::new();
 
     while ip < prog.body.len() {
-        let cur = prog.body[ip];
+        let cur = prog.body[ip].clone();
         let mut new_ip = None;
 
         match cur {
@@ -91,6 +92,10 @@ pub fn run(prog: Program) {
                     panic!("Unresolved IP {:?}", i);
                 }
             }
+
+            IrOp::BpUpdate => bp = vstack.len() as isize,
+            IrOp::BpRem(n) => bp -= n,
+            IrOp::BpGet(n) => vstack.push(vstack[(bp + n) as usize]),
 
             IrOp::Exit => break
         }

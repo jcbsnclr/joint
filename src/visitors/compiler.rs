@@ -1,4 +1,4 @@
-use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData, TypeExprData};
+use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData};
 use crate::lexer::{BinOp, UnOp};
 use crate::visitors::validator::Type;
 
@@ -12,7 +12,7 @@ pub enum OpRef {
     Resolved(usize)
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum IrOp {
     Lit(i64),
 
@@ -29,6 +29,10 @@ pub enum IrOp {
     PrintString,
     PrintType(Type),
     Ip,
+
+    BpUpdate,
+    BpRem(isize),
+    BpGet(isize),
 
     GotoIf(OpRef),
 
@@ -51,13 +55,17 @@ pub struct Compiler {
 struct Scope {
     var_total: usize,
     var_ptrs: Vec<HashMap<String, usize>>,
+
+    arg_stores: HashMap<String, usize>
 }
 
 impl Scope {
     fn new() -> Scope {
         Scope {
             var_total: 0,
-            var_ptrs: vec![HashMap::new()]
+            var_ptrs: vec![HashMap::new()],
+
+            arg_stores: HashMap::new()
         }
     }
 
@@ -151,6 +159,18 @@ impl Compiler {
                 self.ops.push(IrOp::Lit(id as i64))
             }
 
+            ExprData::FnCall(name, args) => {
+                let id = *self.func_ids.get(name).unwrap();
+
+                self.ops.push(IrOp::BpUpdate);
+
+                for arg in args {
+                    self.compile_expr(arg);
+                }
+
+                self.ops.push(IrOp::Call(OpRef::Unresolved(id)))
+            }
+
             ExprData::BinOp(op, n1, n2) => {
                 self.compile_expr(n1);
                 self.compile_expr(n2);
@@ -173,12 +193,16 @@ impl Compiler {
             }
 
             ExprData::PrintType(expr) => {
-                self.ops.push(IrOp::PrintType(expr.typ.unwrap()))
+                self.ops.push(IrOp::PrintType(expr.typ.clone().unwrap()))
             }
 
-            ExprData::Ident(name) => {
-                let ptr = self.scope.get_var_ptr(name);
-                self.ops.push(IrOp::Get(ptr));
+            ExprData::Get(name) => {
+                if let Some(pos) = self.scope.arg_stores.get(name) {
+                    self.ops.push(IrOp::BpGet(*pos as isize));
+                } else {
+                    let ptr = self.scope.get_var_ptr(name);
+                    self.ops.push(IrOp::Get(ptr));
+                }
             }
 
             ExprData::Set(name, val) => {
@@ -250,7 +274,7 @@ impl Compiler {
         }
     }
 
-    fn compile_declaration(&mut self, Declaration { span, kind, .. }: &Declaration) {
+    fn compile_declaration(&mut self, Declaration { span, kind }: &Declaration) {
         match kind {
             DeclarationKind::Func { name, args, body } => {
                 let id = *self.func_ids.get(name).unwrap();
@@ -258,11 +282,17 @@ impl Compiler {
 
                 self.scope.push_scope();
 
+                for (i, arg) in args.iter().enumerate() {
+                    self.scope.arg_stores.insert(arg.clone(), i);
+                }
+
                 for expr in body.iter() {
                     self.compile_expr(expr);
                 }
                 
                 self.scope.pop_scope();
+
+                self.ops.push(IrOp::BpRem(args.len() as isize));
 
                 self.ops.push(IrOp::Return);
             },
