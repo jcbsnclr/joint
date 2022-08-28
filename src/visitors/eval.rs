@@ -15,6 +15,8 @@ pub fn run(prog: Program) {
 
         match cur {
             IrOp::Lit(i) => vstack.push(i),
+
+            IrOp::PrintType(t) => println!("{:?}", t),
             
             IrOp::BinOp(op) => {
                 let (v2, v1) = (vstack.pop().unwrap(), vstack.pop().unwrap());

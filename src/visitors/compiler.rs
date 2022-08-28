@@ -1,4 +1,4 @@
-use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData};
+use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData, TypeExprData};
 use crate::lexer::{BinOp, UnOp};
 
 use std::collections::HashMap;
@@ -23,6 +23,7 @@ pub enum IrOp {
     Return,
 
     Print,
+    PrintType(TypeExprData),
     Ip,
 
     GotoIf(OpRef),
@@ -122,13 +123,15 @@ impl Compiler {
             DeclarationKind::Var { name, value } => {
                 let ptr = self.scope.define_var(name.clone());
                 self.globals.push((ptr, *value));
-            }
+            },
+
+            _ => ()
         }
 
         self.funcs = vec![0; self.func_count()];
     }
 
-    fn compile_expr(&mut self, Expr { span, data }: &Expr) {
+    fn compile_expr(&mut self, Expr { span, data, typ }: &Expr) {
         match data {
             ExprData::Integer(n) => {
                 self.ops.push(IrOp::Lit(*n));
@@ -148,6 +151,10 @@ impl Compiler {
             ExprData::Print(val) => {
                 self.compile_expr(val);
                 self.ops.push(IrOp::Print);
+            }
+
+            ExprData::PrintType(expr) => {
+                self.ops.push(IrOp::PrintType(expr.typ.unwrap()))
             }
 
             ExprData::Ident(name) => {
@@ -220,7 +227,7 @@ impl Compiler {
         }
     }
 
-    fn compile_declaration(&mut self, Declaration { span, kind }: &Declaration) {
+    fn compile_declaration(&mut self, Declaration { span, kind, .. }: &Declaration) {
         match kind {
             DeclarationKind::Func { name, args, body } => {
                 let id = *self.func_ids.get(name).unwrap();
@@ -241,7 +248,9 @@ impl Compiler {
                 let ptr = self.scope.get_var_ptr(name);
                 
                 self.globals.push((ptr, *value));
-            }
+            },
+
+            _ => ()
         }
     }
 

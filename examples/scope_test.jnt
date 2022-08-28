@@ -2,7 +2,8 @@ func main does
     var counter 10
 
     do
-        counter 20 set
+        var new_val 20
+        counter new_val set
     done
 
     do 

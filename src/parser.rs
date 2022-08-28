@@ -17,13 +17,16 @@ pub enum ExprData {
     DoWhile(Box<Expr>, Vec<Expr>),
     DoBlock(Vec<Expr>),
 
+    PrintType(Box<Expr>),
+
     Var(String, i64),
 }
 
 #[derive(Debug, Clone)]
 pub struct Expr {
     pub span: (usize, usize),
-    pub data: ExprData
+    pub data: ExprData,
+    pub typ: Option<TypeExprData>,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +39,10 @@ pub enum DeclarationKind {
     Var {
         name: String,
         value: i64
+    },
+    Type {
+        var: String,
+        typ: TypeExpr
     }
 }
 
@@ -120,6 +127,8 @@ pub enum ParserErrorKind<'a> {
         expected: usize,
         found: usize
     },
+
+    UnknownType(&'a str),
     
     UnterminatedStringLiteral,
     UnexpectedEof,
@@ -129,6 +138,69 @@ pub enum ParserErrorKind<'a> {
 pub struct ParserError<'a> {
     pub span: Option<(usize, usize)>,
     pub kind: ParserErrorKind<'a>
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum TypeExprData {
+    U8, I8,
+    U16, I16,
+    U32, I32,
+    U64, I64
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeExpr {
+    pub span: (usize, usize),
+    pub data: TypeExprData
+}
+
+fn parse_type_expr<'a>(lexer: &mut Lexer<'a>) -> Result<TypeExpr, ParserError<'a>> {
+    let t = expect_identifier(lexer)?;
+
+    expect_keyword(lexer, Keyword::Done)?;
+
+    match t.data() {
+        "U8" => Ok(TypeExpr {
+            span: t.span(),
+            data: TypeExprData::U8
+        }),
+        "I8" => Ok(TypeExpr {
+            span: t.span(),
+            data: TypeExprData::I8
+        }),
+
+        "U16" => Ok(TypeExpr {
+            span: t.span(),
+            data: TypeExprData::U16
+        }),
+        "I16" => Ok(TypeExpr {
+            span: t.span(),
+            data: TypeExprData::I16
+        }),
+
+        "U32" => Ok(TypeExpr {
+            span: t.span(),
+            data: TypeExprData::U32
+        }),
+        "I32" => Ok(TypeExpr {
+            span: t.span(),
+            data: TypeExprData::I32
+        }),
+
+        "U64" => Ok(TypeExpr {
+            span: t.span(),
+            data: TypeExprData::U64
+        }),
+        "I64" => Ok(TypeExpr {
+            span: t.span(),
+            data: TypeExprData::I64
+        }),
+
+        _ => Err(ParserError {
+            span: Some(t.span()),
+            kind: ParserErrorKind::UnknownType(t.data())
+        })
+    }
 }
 
 fn expect_next<'a>(lexer: &mut Lexer<'a>, pred: &'a [TokenKind]) -> Result<Token<'a>, ParserError<'a>> {
@@ -187,7 +259,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
     let expr = match next.kind() {
         TokenKind::Integer => Ok(Expr {
             span: next.span(),
-            data: ExprData::Integer(next.data().parse().expect("lexer misidentifier integer"))
+            data: ExprData::Integer(next.data().parse().expect("lexer misidentifier integer")),
+            typ: None
         }),
 
         TokenKind::Keyword(Keyword::Var) => {
@@ -196,7 +269,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
             Ok(Expr {
                 span: (next.span().0, val.span().1),
-                data: ExprData::Var(name.data().to_owned(), val.data().parse().unwrap())
+                data: ExprData::Var(name.data().to_owned(), val.data().parse().unwrap()),
+                typ: None
             })
         }
 
@@ -216,7 +290,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
             Ok(Expr {
                 span: (start, end),
-                data: ExprData::BinOp(op, Box::new(n1), Box::new(n2))
+                data: ExprData::BinOp(op, Box::new(n1), Box::new(n2)),
+                typ: None
             })
         },
 
@@ -231,7 +306,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
             Ok(Expr {
                 span: (start, end),
-                data: ExprData::UnOp(op, Box::new(n))
+                data: ExprData::UnOp(op, Box::new(n)),
+                typ: None
             })
         }
 
@@ -252,7 +328,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
             if let Expr { data: ExprData::Ident(name), ..} = name {
                 Ok(Expr {
                     span: (name_span.0, next.span().1),
-                    data: ExprData::Set(name, Box::new(val))
+                    data: ExprData::Set(name, Box::new(val)),
+                    typ: None
                 })
             } else {
                 Err(ParserError {
@@ -271,7 +348,22 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
             Ok(Expr {
                 span: (start, end),
-                data: ExprData::Print(Box::new(val))
+                data: ExprData::Print(Box::new(val)),
+                typ: None
+            })
+        }
+
+        TokenKind::Keyword(Keyword::PrintType) => {
+            let expr = stack.pop()
+                .ok_or(ParserError {
+                    span: Some(next.span()),
+                    kind: ParserErrorKind::FunctionUnderflow { expected: 1, found: 0 }
+                })?;
+
+            Ok(Expr {
+                span: (start, end),
+                data: ExprData::PrintType(Box::new(expr)),
+                typ: None
             })
         }
 
@@ -292,7 +384,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
             Ok(Expr {
                 span: (0, 0),
-                data: ExprData::DoLoopIf(Box::new(cond), body)
+                data: ExprData::DoLoopIf(Box::new(cond), body),
+                typ: None
             })
         }
 
@@ -307,7 +400,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
             Ok(Expr {
                 span: (0, 0),
-                data: ExprData::DoWhile(Box::new(cond), body)
+                data: ExprData::DoWhile(Box::new(cond), body),
+                typ: None
             })
         }
 
@@ -316,7 +410,8 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
 
             Ok(Expr {
                 span: (0, 0),
-                data: ExprData::DoBlock(body)
+                data: ExprData::DoBlock(body),
+                typ: None
             })
         }
 
@@ -326,6 +421,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack) -> Result<(), Pa
             Ok(Expr {
                 span: (start, end),
                 data: ExprData::Ident(name),
+                typ: None
             })
         },
 
@@ -402,6 +498,15 @@ pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'
 
                 decls.push(Declaration { span: (next.span().0, val.span().1), kind: DeclarationKind::Var {
                     name: name.data().to_owned(), value: val.data().parse().unwrap()
+                }});
+            }
+
+            TokenKind::Keyword(Keyword::Type) => {
+                let name = expect_identifier(lexer)?;
+                let typ = parse_type_expr(lexer)?;
+
+                decls.push(Declaration { span: (next.span().0, typ.span.1), kind: DeclarationKind::Type {
+                    var: name.data().to_owned(), typ: typ
                 }});
             }
 

@@ -1,0 +1,10 @@
+type a I64 done
+var a 0
+
+type b U32 done
+var b 0
+
+func main does
+    a print-type
+    b print-type
+done

@@ -14,6 +14,8 @@ pub enum Keyword {
     Func,
     Does,
     Done,
+    Type,
+    PrintType,
 
     Ip
 }
@@ -165,6 +167,7 @@ impl<'a> Lexer<'a> {
             "=" => TokenKind::BinOp(BinOp::Equals),
 
             "print" => TokenKind::Keyword(Keyword::Print),
+            "print-type" => TokenKind::Keyword(Keyword::PrintType),
             "call" => TokenKind::Keyword(Keyword::Call),
             "return" => TokenKind::Keyword(Keyword::Return),
             "set" => TokenKind::Keyword(Keyword::Set),
@@ -176,6 +179,8 @@ impl<'a> Lexer<'a> {
             "func" => TokenKind::Keyword(Keyword::Func),
             "does" => TokenKind::Keyword(Keyword::Does),
             "done" => TokenKind::Keyword(Keyword::Done),
+
+            "type" => TokenKind::Keyword(Keyword::Type),
 
             "$ip" => TokenKind::Keyword(Keyword::Ip),
 

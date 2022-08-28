@@ -33,8 +33,10 @@ fn main() {
 
     // visitors::eval::run(ir);
 
-    let prog = parser::parse(&mut lexer)
+    let mut prog = parser::parse(&mut lexer)
         .unwrap();
+
+    visitors::validator::validate(&mut prog);
 
     println!("{:#?}", prog);
 
