@@ -1,3 +1,11 @@
+//! The lexer is the first stage in the process of running some Turbo code. 
+//! 
+//! When the user provides a source file to the interpreter, it will load the contents of the 
+//! source file into a string and create a [Lexer] with a view into the source string, which is 
+//! then passed to the parser (see: [crate::visitors::parser::parse]). The [Lexer] produces a 
+//! stream of [Token]s - sections of the string, categorised based on their contents - which the 
+//! parser then uses to produce a tree providing context to the source file.
+
 use std::str::CharIndices;
 use std::iter::Peekable;
 
@@ -109,6 +117,16 @@ impl<'a> Token<'a> {
 /// An [Iterator] that produces a stream of tokens describing a source string. The lexer does not 
 /// perform any memory allocations or copying of data, it simply scans the source file, determines
 /// the type of the next token, and takes an immutable view into the source data.
+/// 
+/// # Example
+/// ```rust
+/// const TEST_SRC: &str = "abc 123";
+/// 
+/// let mut lx = Lexer::from_source(TEST_SRC);
+/// 
+/// assert_eq!(lx.next_token().map(|t| t.kind()), Some(TokenKind::Identifier));
+/// assert_eq!(lx.next_token().map(|t| t.kind()), Some(TokenKind::Integer));
+/// ```
 pub struct Lexer<'a> {
     /// The source string being tokenised, used to extract a [Token]'s `data`
     source: &'a str,
