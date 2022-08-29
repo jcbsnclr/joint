@@ -78,10 +78,6 @@ pub fn run(prog: Program) {
                 println!("{:?}", prog.strings[id as usize]);
             }
 
-            IrOp::Ip => {
-                vstack.push(ip as i64);
-            }
-
             IrOp::GotoIf(i) => {
                 if let OpRef::Resolved(i) = i {
                     let cond = vstack.pop().unwrap();

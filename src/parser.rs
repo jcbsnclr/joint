@@ -222,13 +222,6 @@ fn expect_identifier<'a>(lexer: &mut Lexer<'a>) -> Result<Token<'a>, ParserError
     Ok(expect_next(lexer, &[TokenKind::Identifier])?)
 }
 
-fn extract_identifier<'a>(lexer: &mut Lexer<'a>, token: Option<Token<'a>>) -> Result<String, ParserError<'a>> {
-    Ok(token.ok_or(ParserError {
-        span: None,
-        kind: ParserErrorKind::UnexpectedToken { expected: &[TokenKind::Identifier], found: None }
-    })?.data().to_owned())
-}
-
 fn expect_keyword<'a>(lexer: &mut Lexer<'a>, kw: Keyword) -> Result<Token<'a>, ParserError<'a>> {
     let next = lexer.next_token()
         .ok_or(ParserError {
@@ -252,7 +245,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a>, stack: &mut ExprStack, fnargs: &mut Has
             kind: ParserErrorKind::UnexpectedEof
         })?;
 
-    let (mut start, mut end) = next.span();
+    let (mut start, end) = next.span();
 
     let expr = match next.kind() {
         TokenKind::Integer => Ok(Expr {
@@ -508,7 +501,6 @@ pub fn parse<'a>(lexer: &mut Lexer<'a>) -> Result<CompilationUnit, ParserError<'
                     ])?;
 
                     if next.kind() == TokenKind::Keyword(Keyword::Does) {
-                        end = next.span().1; 
                         break;
                     } else {
                         let ident = next.data()

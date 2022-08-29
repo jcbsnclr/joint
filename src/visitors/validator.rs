@@ -1,5 +1,4 @@
-use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData, TypeExpr};
-use crate::lexer::{BinOp, UnOp};
+use crate::parser::{CompilationUnit, Declaration, DeclarationKind, Expr, ExprData};
 
 use std::collections::HashMap;
 
@@ -36,7 +35,7 @@ impl PartialEq<Type> for Type {
         use AbstractType as A;
 
         match self {
-            Type::Abstract(AbstractType::Integer) => matches!(
+            Type::Abstract(A::Integer) => matches!(
                 rhs, 
                 Type::Concrete(
                     I::U8 | I::I8 | 
@@ -51,7 +50,7 @@ impl PartialEq<Type> for Type {
                 I::U16 | I::I16 | 
                 I::U32 | I::I32 | 
                 I::U64 | I::I64
-            ) => matches!(rhs, Type::Abstract(AbstractType::Integer)),
+            ) => matches!(rhs, Type::Abstract(A::Integer)),
 
             Type::Concrete(I::String) => matches!(rhs, Type::Concrete(I::String)),
 
@@ -80,21 +79,19 @@ impl Validator {
         }
     }
 
-    fn current_scope(&self) -> &HashMap<String, Type> {
-        self.var_types.iter().last().unwrap()
-    }
-
     fn current_scope_mut(&mut self) -> &mut HashMap<String, Type> {
         self.var_types.iter_mut().last().unwrap()
     }
 
-    fn push_scope(&mut self) {
-        self.var_types.push(HashMap::new());
-    }
+    // TODO: var and type decls outside of the top level
+    // 
+    // fn push_scope(&mut self) {
+    //     self.var_types.push(HashMap::new());
+    // }
 
-    fn pop_scope(&mut self) {
-        self.var_types.pop().unwrap();
-    }
+    // fn pop_scope(&mut self) {
+    //     self.var_types.pop().unwrap();
+    // }
 
     fn declare_var(&mut self, name: String, typ: Type) {
         self.current_scope_mut()
@@ -114,7 +111,7 @@ impl Validator {
 
     fn fill_types(&mut self, expr: &mut Expr) {
         expr.typ = match &mut expr.data {
-            ExprData::BinOp(op, n1, n2) => {
+            ExprData::BinOp(_,n1, n2) => {
                 self.fill_types(n1);
                 self.fill_types(n2);
 
@@ -124,7 +121,7 @@ impl Validator {
 
                 n1.typ.clone()
             }
-            ExprData::UnOp(op, n) => {
+            ExprData::UnOp(_,n) => {
                 self.fill_types(n);
 
                 if n.typ != Some(Type::Abstract(AbstractType::Integer)) {

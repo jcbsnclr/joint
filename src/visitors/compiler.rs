@@ -28,7 +28,6 @@ pub enum IrOp {
     Print,
     PrintString,
     PrintType(Type),
-    Ip,
 
     BpUpdate,
     BpRem(isize),
@@ -130,9 +129,9 @@ impl Compiler {
 
     fn func_count(&self) -> usize { self.func_ids.len() }
 
-    fn process_declaration(&mut self, Declaration { span, kind }: &Declaration) {
+    fn process_declaration(&mut self, Declaration { kind, .. }: &Declaration) {
         match kind {
-            DeclarationKind::Func { name, args, body } => {
+            DeclarationKind::Func { name, .. } => {
                 self.func_ids.insert(name.clone(), self.func_count());
             },
 
@@ -147,7 +146,7 @@ impl Compiler {
         self.funcs = vec![0; self.func_count()];
     }
 
-    fn compile_expr(&mut self, Expr { span, data, typ }: &Expr) {
+    fn compile_expr(&mut self, Expr { data, .. }: &Expr) {
         match data {
             ExprData::Integer(n) => {
                 self.ops.push(IrOp::Lit(*n));
@@ -274,7 +273,7 @@ impl Compiler {
         }
     }
 
-    fn compile_declaration(&mut self, Declaration { span, kind }: &Declaration) {
+    fn compile_declaration(&mut self, Declaration { kind, .. }: &Declaration) {
         match kind {
             DeclarationKind::Func { name, args, body } => {
                 let id = *self.func_ids.get(name).unwrap();
